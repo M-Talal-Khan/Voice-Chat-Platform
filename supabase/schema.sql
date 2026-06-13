@@ -150,7 +150,11 @@ create policy "Users can update own profile"
 drop policy if exists "Servers are viewable by members" on servers;
 create policy "Servers are viewable by members"
   on servers for select
-  using (public.is_server_member(servers.id, auth.uid()));
+  using (
+    owner_id = auth.uid()
+    or
+    public.is_server_member(servers.id, auth.uid())
+  );
 
 drop policy if exists "Authenticated users can create servers" on servers;
 create policy "Authenticated users can create servers"
@@ -317,19 +321,38 @@ create policy "Users can mark DMs as read"
   on direct_messages for update
   using (auth.uid() = receiver_id);
 
--- 4. Realtime
+-- 5. Realtime (idempotent — errors if already added are ignored)
 
-alter publication supabase_realtime add table messages;
-alter publication supabase_realtime add table direct_messages;
-alter publication supabase_realtime add table message_reactions;
-alter publication supabase_realtime add table server_members;
+do $$
+begin
+  alter publication supabase_realtime add table messages;
+exception when duplicate_object then null;
+end $$;
 
--- 5. Storage buckets (run in Supabase dashboard Storage section)
+do $$
+begin
+  alter publication supabase_realtime add table direct_messages;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table message_reactions;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table server_members;
+exception when duplicate_object then null;
+end $$;
+
+-- 6. Storage buckets (run in Supabase dashboard Storage section)
 
 -- Bucket: avatars (public read, authenticated write)
 -- Bucket: attachments (public read, authenticated write)
 
--- 6. Helper: auto-create profile on signup
+-- 7. Helper: auto-create profile on signup
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql

@@ -7,7 +7,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
-  SheetClose,
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -407,11 +406,9 @@ export function UserSettings({
         </div>
 
         <div className="border-t border-border/60 p-4">
-          <SheetClose asChild>
-            <Button variant="outline" className="w-full">
-              Close
-            </Button>
-          </SheetClose>
+          <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
         </div>
       </SheetContent>
     </Sheet>

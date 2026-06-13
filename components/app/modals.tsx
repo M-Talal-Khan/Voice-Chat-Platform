@@ -8,8 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -105,9 +103,9 @@ export function CreateServerModal({
           {error && <FieldError errors={[{ message: error }]} />}
         </FieldGroup>
         <div className="flex justify-end gap-2">
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={handleCreate} disabled={loading}>
             {loading ? "Creating..." : "Create"}
           </Button>
@@ -210,9 +208,9 @@ export function JoinServerModal({
           {error && <FieldError errors={[{ message: error }]} />}
         </FieldGroup>
         <div className="flex justify-end gap-2">
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={handleJoin} disabled={loading}>
             {loading ? "Joining..." : "Join"}
           </Button>
@@ -323,9 +321,9 @@ export function CreateChannelModal({
           {error && <FieldError errors={[{ message: error }]} />}
         </FieldGroup>
         <div className="flex justify-end gap-2">
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={handleCreate} disabled={loading}>
             {loading ? "Creating..." : "Create"}
           </Button>
@@ -370,9 +368,9 @@ export function ServerInfoModal({
           </Button>
         </div>
         <div className="flex justify-end">
-          <DialogClose asChild>
-            <Button variant="outline">Close</Button>
-          </DialogClose>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -427,9 +425,9 @@ export function DeleteServerModal({
           </Field>
         </FieldGroup>
         <div className="flex justify-end gap-2">
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button
             variant="destructive"
             onClick={handleDelete}

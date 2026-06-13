@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -390,9 +389,9 @@ export default function AppLayout({
                 )}
               </FieldGroup>
               <div className="flex justify-end gap-2">
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
+                <Button variant="outline" onClick={() => setShowServerSettings(false)}>
+                  Cancel
+                </Button>
                 <Button onClick={handleUpdateServerName}>Save</Button>
               </div>
             </DialogContent>
