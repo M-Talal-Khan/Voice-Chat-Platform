@@ -34,7 +34,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { UserAvatar } from "@/components/app/user-avatar"
+import { UserAvatar, type AvatarUser } from "@/components/app/user-avatar"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import type { Channel, Server, Profile, ServerMember } from "@/lib/types"
@@ -257,7 +257,7 @@ export function ChannelSidebar({
                   status: currentUser.status,
                   customStatus: undefined,
                   avatar: currentUser.avatar_url ?? undefined,
-                } as any
+                } as AvatarUser
               }
               size="sm"
             />

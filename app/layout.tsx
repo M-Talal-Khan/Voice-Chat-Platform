@@ -11,9 +11,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Resonate — Voice & Text Chat for Communities',
+  title: 'NexTalk — Voice & Text Chat for Communities',
   description:
-    'Resonate is a TeamSpeak and Discord style voice and text chat app for your community. Create servers, hop into voice channels, and stay connected.',
+    'NexTalk is a TeamSpeak and Discord style voice and text chat app for your community. Create servers, hop into voice channels, and stay connected.',
   generator: 'v0.app',
 }
 

@@ -7,6 +7,8 @@ import { ChannelSidebar } from "@/components/app/channel-sidebar"
 import { DmSidebar } from "@/components/app/dm-sidebar"
 import { VoiceRoom } from "@/components/app/voice-provider"
 import { UserSettings } from "@/components/app/user-settings"
+import { ToastContainer } from "@/components/app/toast-container"
+import { ErrorBoundary } from "@/components/app/error-boundary"
 import {
   CreateServerModal,
   JoinServerModal,
@@ -323,10 +325,15 @@ export default function AppLayout({
       )}
 
       {/* Main Content */}
-      <main className="flex flex-1 flex-col bg-chat">{children}</main>
+      <main className="flex flex-1 flex-col bg-chat">
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </main>
 
       {/* User Settings */}
       <UserSettings open={showUserSettings} onOpenChange={setShowUserSettings} />
+
+      {/* Toast notifications */}
+      <ToastContainer />
 
       {/* Voice Room (hidden, manages connection) */}
       {connectedVoiceChannelId && currentUser && selectedServer && (

@@ -1,6 +1,28 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
-import { statusColor, type User } from "@/lib/mock-data"
+
+export type AvatarUser = {
+  id: string
+  username: string
+  initials: string
+  color: string
+  status: "online" | "idle" | "dnd" | "offline"
+  avatar?: string
+  customStatus?: string
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case "online":
+      return "var(--color-online)"
+    case "idle":
+      return "var(--color-idle)"
+    case "dnd":
+      return "var(--color-dnd)"
+    default:
+      return "var(--color-offline)"
+  }
+}
 
 export function UserAvatar({
   user,
@@ -8,7 +30,7 @@ export function UserAvatar({
   showStatus = true,
   className,
 }: {
-  user: User
+  user: AvatarUser
   size?: "default" | "sm" | "lg"
   showStatus?: boolean
   className?: string

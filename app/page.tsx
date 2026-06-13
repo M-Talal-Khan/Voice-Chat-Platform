@@ -59,7 +59,7 @@ export default function LandingPage() {
             <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Radio className="size-5" />
             </span>
-            <span className="text-lg font-semibold tracking-tight">Resonate</span>
+            <span className="text-lg font-semibold tracking-tight">NexTalk</span>
           </Link>
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#features" className="transition-colors hover:text-foreground">
@@ -96,7 +96,7 @@ export default function LandingPage() {
               <span className="text-primary">comes to talk</span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Resonate brings your people together with high-quality voice rooms,
+              NexTalk brings your people together with high-quality voice rooms,
               organized text channels, and the tools to run a thriving community.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -263,10 +263,10 @@ export default function LandingPage() {
             <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Radio className="size-4" />
             </span>
-            <span className="text-sm font-medium">Resonate</span>
+            <span className="text-sm font-medium">NexTalk</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Built as a UI demo. Voice and data wiring coming soon.
+            Voice &amp; text chat for your community.
           </p>
         </div>
       </footer>
