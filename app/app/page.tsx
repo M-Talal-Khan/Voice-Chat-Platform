@@ -12,6 +12,9 @@ import {
   X,
   Loader2,
   ChevronDown,
+  Paperclip,
+  FileText,
+  Image,
 } from "lucide-react"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
@@ -405,6 +408,53 @@ function MessageBubble({
         )}
         <p className="text-sm leading-relaxed text-foreground/90">{message.content}</p>
 
+        {/* Attachments */}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {message.attachments.map((att) => {
+              const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(
+                att.file_type?.split("/")[1]?.toLowerCase() ?? "",
+              )
+              if (isImage) {
+                return (
+                  <a
+                    key={att.id}
+                    href={att.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="overflow-hidden rounded-lg border border-border"
+                  >
+                    <img
+                      src={att.file_url}
+                      alt={att.file_name}
+                      className="max-h-48 max-w-60 object-cover"
+                    />
+                  </a>
+                )
+              }
+              return (
+                <a
+                  key={att.id}
+                  href={att.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs transition-colors hover:bg-muted"
+                >
+                  <FileText className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{att.file_name}</p>
+                    <p className="text-muted-foreground">
+                      {att.file_size > 1024 * 1024
+                        ? `${(att.file_size / 1024 / 1024).toFixed(1)} MB`
+                        : `${(att.file_size / 1024).toFixed(0)} KB`}
+                    </p>
+                  </div>
+                </a>
+              )
+            })}
+          </div>
+        )}
+
         {/* Reactions */}
         {groupedReactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
@@ -510,6 +560,10 @@ function ChatInput({
 }) {
   const [content, setContent] = useState("")
   const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const { currentUser, selectedChannel } = useAppStore()
 
   async function handleSend(e?: React.FormEvent) {
@@ -519,34 +573,130 @@ function ChatInput({
     setSending(true)
     const supabase = createClient()
 
-    const { error } = await supabase.from("messages").insert({
-      channel_id: channelId,
-      user_id: currentUser.id,
-      content: content.trim(),
-      reply_to_id: replyTo?.id ?? null,
-    })
+    const { data: msg, error } = await supabase
+      .from("messages")
+      .insert({
+        channel_id: channelId,
+        user_id: currentUser.id,
+        content: content.trim(),
+        reply_to_id: replyTo?.id ?? null,
+      })
+      .select()
+      .single()
 
-    if (!error) {
+    if (!error && msg) {
       setContent("")
       onReplyClear()
     }
     setSending(false)
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !currentUser) return
+
+    // Validate size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("File size must be under 10MB")
+      return
+    }
+
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+    const supabase = createClient()
+
+    const fileExt = file.name.split(".").pop()
+    const filePath = `${currentUser.id}/${Date.now()}.${fileExt}`
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("attachments")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+    if (uploadError) {
+      setUploadError(uploadError.message)
+      setUploading(false)
+      return
+    }
+
+    const { data: urlData } = await supabase.storage
+      .from("attachments")
+      .getPublicUrl(filePath)
+
+    // Insert the message first, then add attachment
+    const { data: msg, error: msgError } = await supabase
+      .from("messages")
+      .insert({
+        channel_id: channelId,
+        user_id: currentUser.id,
+        content: file.name,
+      })
+      .select()
+      .single()
+
+    if (msgError || !msg) {
+      setUploadError(msgError?.message ?? "Failed to create message")
+      setUploading(false)
+      return
+    }
+
+    await supabase.from("attachments").insert({
+      message_id: msg.id,
+      file_url: urlData?.publicUrl ?? "",
+      file_name: file.name,
+      file_type: file.type,
+      file_size: file.size,
+    })
+
+    setUploadProgress(100)
+    setUploading(false)
+    if (fileRef.current) fileRef.current.value = ""
+  }
+
   return (
     <form onSubmit={handleSend} className="shrink-0 border-t border-border/60 px-4 py-3">
+      {uploadError && (
+        <div className="mb-2 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+          {uploadError}
+        </div>
+      )}
+      {uploading && (
+        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          Uploading... {uploadProgress > 0 && `${uploadProgress}%`}
+        </div>
+      )}
       <div className="flex items-center gap-2 rounded-lg bg-background/40 px-3 py-2">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,.pdf,.txt,.zip,.mp3,.mp4"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          title="Attach file"
+        >
+          <Paperclip className="size-4" />
+        </button>
         <input
           type="text"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder={`Message #${selectedChannel?.name ?? "channel"}`}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          disabled={sending}
+          disabled={sending || uploading}
         />
         <button
           type="submit"
-          disabled={!content.trim() || sending}
+          disabled={(!content.trim() && !uploading) || sending || uploading}
           className="rounded-md bg-primary p-1.5 text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {sending ? (
