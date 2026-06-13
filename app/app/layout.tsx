@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/field"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
+import { usePresence, useUnreadNotifications } from "@/hooks/use-presence"
 import { Plus } from "lucide-react"
 import type { Server, Channel } from "@/lib/types"
 
@@ -234,6 +235,10 @@ export default function AppLayout({
   }
 
   const isOwner = selectedServer?.owner_id === currentUser?.id
+
+  // Presence and notifications
+  usePresence()
+  useUnreadNotifications()
 
   if (loading) {
     return (
