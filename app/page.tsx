@@ -74,10 +74,10 @@ export default function LandingPage() {
           </nav>
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/login">Log in</Link>
+              <Link href="/auth/login">Log in</Link>
             </Button>
             <Button asChild size="sm">
-              <Link href="/signup">Sign up</Link>
+              <Link href="/auth/register">Sign up</Link>
             </Button>
           </div>
         </div>
@@ -246,7 +246,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/signup">Get started free</Link>
+                <Link href="/auth/register">Get started free</Link>
               </Button>
               <Button asChild size="lg" variant="ghost">
                 <Link href="/app">Explore the app</Link>
