@@ -20,13 +20,14 @@ export function DmSidebar() {
 
   useEffect(() => {
     if (!currentUser) return
+    const userId = currentUser.id
     const supabase = createClient()
 
     async function fetchConversations() {
       const { data } = await supabase
         .from("direct_messages")
         .select("*, sender:sender_id(*), receiver:receiver_id(*)")
-        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
         .order("created_at", { ascending: false })
 
       if (!data) {
@@ -38,14 +39,14 @@ export function DmSidebar() {
       const seen = new Map<string, { user: Profile; lastMessage: DirectMessage; unread: number }>()
 
       for (const dm of data as any[]) {
-        const otherUser: Profile = dm.sender_id === currentUser.id ? dm.receiver : dm.sender
+        const otherUser: Profile = dm.sender_id === userId ? dm.receiver : dm.sender
         if (!otherUser) continue
 
         if (!seen.has(otherUser.id)) {
           seen.set(otherUser.id, {
             user: otherUser,
             lastMessage: dm,
-            unread: !dm.read && dm.receiver_id === currentUser.id ? 1 : 0,
+            unread: !dm.read && dm.receiver_id === userId ? 1 : 0,
           })
         }
       }

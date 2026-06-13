@@ -15,7 +15,12 @@ import {
   Paperclip,
   FileText,
   Image,
+  MicOff,
+  PhoneOff,
+  Headphones,
 } from "lucide-react"
+import { useParticipants } from "@livekit/components-react"
+import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import type { Message } from "@/lib/types"
@@ -40,18 +45,7 @@ export default function AppPage() {
   }
 
   if (selectedChannel.type === "voice") {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-lg font-semibold">
-            <span className="text-[var(--color-online)]">●</span> Voice Channel
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Connected to <strong>{selectedChannel.name}</strong>
-          </p>
-        </div>
-      </div>
-    )
+    return <VoiceChannelView channelName={selectedChannel.name} channelId={selectedChannel.id} />
   }
 
   return <ChatView channelId={selectedChannel.id} channelName={selectedChannel.name} channelTopic={selectedChannel.topic ?? undefined} />
@@ -424,7 +418,8 @@ function MessageBubble({
                     rel="noopener noreferrer"
                     className="overflow-hidden rounded-lg border border-border"
                   >
-                    <img
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                       src={att.file_url}
                       alt={att.file_name}
                       className="max-h-48 max-w-60 object-cover"
@@ -709,3 +704,122 @@ function ChatInput({
     </form>
   )
 }
+
+// ─── Voice Channel View ─────────────────────────────────────────
+
+function VoiceChannelView({ channelName, channelId }: { channelName: string; channelId: string }) {
+  const {
+    connectedVoiceChannelId,
+    setConnectedVoiceChannelId,
+    micOn,
+    setMicOn,
+    deafened,
+    setDeafened,
+  } = useAppStore()
+
+  const participants = useParticipants()
+  const isConnected = connectedVoiceChannelId === channelId
+
+  if (!isConnected) {
+    return (
+      <div className="flex h-full flex-col relative overflow-hidden bg-background">
+        {/* Background ambient glow */}
+        <div className="hero-glow left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20" />
+        
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center animate-fade-in-up">
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-3xl bg-card border border-border/60 shadow-xl shadow-black/10">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+              <Volume2 className="size-6" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight">{channelName}</h2>
+          <p className="mt-3 text-sm text-muted-foreground max-w-sm text-center">
+            Jump into the voice channel to start talking with your community.
+          </p>
+          <Button
+            size="lg"
+            className="mt-8 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+            onClick={() => setConnectedVoiceChannelId(channelId)}
+          >
+            Join Voice
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full flex-col relative overflow-hidden bg-background">
+      {/* Header */}
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+        <Volume2 className="size-4 text-muted-foreground" />
+        <span className="font-semibold">{channelName}</span>
+        <span className="mx-1 h-4 w-px bg-border/60" />
+        <span className="text-xs text-primary font-medium flex items-center gap-1.5">
+          <span className="relative inline-block size-2 rounded-full bg-[var(--color-online)]">
+            <span className="absolute inset-0 animate-ping rounded-full bg-[var(--color-online)] opacity-50" />
+          </span>
+          Connected
+        </span>
+      </div>
+
+      {/* Grid */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {participants.map((p) => {
+            const initials = p.identity?.slice(0, 2).toUpperCase() ?? "??"
+            return (
+              <div
+                key={p.identity}
+                className={`relative flex flex-col items-center justify-center rounded-2xl border bg-card p-6 shadow-sm transition-colors duration-300 ${
+                  p.isSpeaking
+                    ? "border-primary shadow-primary/20 shadow-lg ring-1 ring-primary"
+                    : "border-border/60"
+                }`}
+              >
+                <div
+                  className={`flex size-16 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary transition-transform duration-300 ${
+                    p.isSpeaking ? "scale-110 bg-primary text-primary-foreground" : ""
+                  }`}
+                >
+                  {initials}
+                </div>
+                <p className="mt-4 text-sm font-medium">{p.identity}</p>
+                {/* Muted indicator could go here if LiveKit tracks were exposed */}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex shrink-0 items-center justify-center gap-4 border-t border-border/60 bg-card/50 p-4 backdrop-blur-sm">
+        <Button
+          variant={micOn && !deafened ? "outline" : "destructive"}
+          size="icon"
+          className="rounded-full size-12 shadow-sm"
+          onClick={() => setMicOn(!micOn)}
+        >
+          {micOn && !deafened ? <Volume2 className="size-5" /> : <MicOff className="size-5" />}
+        </Button>
+        <Button
+          variant={deafened ? "destructive" : "outline"}
+          size="icon"
+          className="rounded-full size-12 shadow-sm"
+          onClick={() => setDeafened(!deafened)}
+        >
+          {deafened ? <Headphones className="size-5 opacity-50" /> : <Headphones className="size-5" />}
+        </Button>
+        <Button
+          variant="destructive"
+          size="icon"
+          className="rounded-full size-12 shadow-sm"
+          onClick={() => setConnectedVoiceChannelId(null)}
+        >
+          <PhoneOff className="size-5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+

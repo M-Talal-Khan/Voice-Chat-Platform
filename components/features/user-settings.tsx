@@ -50,7 +50,7 @@ export function UserSettings({
 
   // Load compact mode from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("nextalk-compact-mode")
+    const saved = localStorage.getItem("thiscord-compact-mode")
     if (saved) setCompactMode(saved === "true")
   }, [])
 
@@ -152,7 +152,7 @@ export function UserSettings({
 
   function handleCompactModeChange(val: boolean) {
     setCompactMode(val)
-    localStorage.setItem("nextalk-compact-mode", val.toString())
+    localStorage.setItem("thiscord-compact-mode", val.toString())
   }
 
   async function handleTestMic() {
@@ -218,6 +218,7 @@ export function UserSettings({
                 <div className="relative">
                   <span className="flex size-16 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
                     {currentUser?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={currentUser.avatar_url}
                         alt=""
@@ -363,7 +364,7 @@ export function UserSettings({
                     <Volume2 className="size-4 text-muted-foreground" />
                     <Slider
                       value={[inputVolume]}
-                      onValueChange={([v]) => setInputVolume(v)}
+                      onValueChange={(val) => setInputVolume(Array.isArray(val) ? val[0] : val)}
                       min={0}
                       max={100}
                       className="flex-1"

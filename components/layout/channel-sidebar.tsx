@@ -26,6 +26,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -34,7 +35,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { UserAvatar, type AvatarUser } from "@/components/app/user-avatar"
+import { UserAvatar, type AvatarUser } from "@/components/features/user-avatar"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import type { Channel, Server, Profile, ServerMember } from "@/lib/types"
@@ -53,6 +54,11 @@ export function ChannelSidebar({
   onToggleDeafen,
   onOpenServerSettings,
   onOpenUserSettings,
+  onOpenCreateChannel,
+  onOpenInvite,
+  onLeaveServer,
+  onDeleteServer,
+  isOwner,
 }: {
   server: Server
   channels: Channel[]
@@ -69,7 +75,6 @@ export function ChannelSidebar({
   onOpenUserSettings: () => void
   onOpenCreateChannel?: () => void
   onOpenInvite?: () => void
-  onOpenServerSettings?: () => void
   onLeaveServer?: () => void
   onDeleteServer?: () => void
   isOwner?: boolean
@@ -109,7 +114,9 @@ export function ChannelSidebar({
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuLabel>{server.name}</DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{server.name}</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => { onOpenInvite?.(); setShowServerMenu(false); }}>
             <Users className="size-4" />
@@ -160,7 +167,7 @@ export function ChannelSidebar({
 
       {/* Channel list */}
       <div className="flex-1 overflow-y-auto px-2 pb-2 no-scrollbar">
-        <ChannelSection label="Text Channels">
+        <ChannelSection label="Text Channels" onAdd={onOpenCreateChannel}>
           {textChannels.map((channel) => (
             <TextChannelRow
               key={channel.id}
@@ -171,13 +178,14 @@ export function ChannelSidebar({
           ))}
         </ChannelSection>
 
-        <ChannelSection label="Voice Channels">
+        <ChannelSection label="Voice Channels" onAdd={onOpenCreateChannel}>
           {voiceChannels.map((channel) => (
             <VoiceChannelRow
               key={channel.id}
               channel={channel}
+              active={channel.id === activeChannelId}
               connected={connectedVoiceId === channel.id}
-              onJoin={() => onJoinVoice(channel.id)}
+              onClick={() => onSelectChannel(channel.id)}
             />
           ))}
         </ChannelSection>
@@ -332,9 +340,11 @@ function MemberRow({ member }: { member: ServerMember }) {
 
 function ChannelSection({
   label,
+  onAdd,
   children,
 }: {
   label: string
+  onAdd?: () => void
   children: React.ReactNode
 }) {
   return (
@@ -344,19 +354,22 @@ function ChannelSection({
           <ChevronDown className="size-3" />
           {label}
         </span>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                className="text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-              />
-            }
-          >
-            <Plus className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>Create channel</TooltipContent>
-        </Tooltip>
+        {onAdd && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onAdd}
+                  className="text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                />
+              }
+            >
+              <Plus className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Create channel</TooltipContent>
+          </Tooltip>
+        )}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
@@ -403,26 +416,30 @@ function TextChannelRow({
 
 function VoiceChannelRow({
   channel,
+  active,
   connected,
-  onJoin,
+  onClick,
 }: {
   channel: Channel
+  active: boolean
   connected: boolean
-  onJoin: () => void
+  onClick: () => void
 }) {
   return (
     <button
       type="button"
-      onClick={onJoin}
+      onClick={onClick}
       className={cn(
         "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-        connected
+        active
           ? "bg-secondary text-foreground"
-          : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
+          : connected
+            ? "text-[var(--color-online)] hover:bg-secondary/40"
+            : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
       )}
     >
-      <Volume2 className="size-4 shrink-0 opacity-70" />
-      <span className="truncate">{channel.name}</span>
+      <Volume2 className={cn("size-4 shrink-0", connected ? "text-[var(--color-online)] animate-pulse" : "opacity-70")} />
+      <span className={cn("truncate", connected && "text-[var(--color-online)] font-medium")}>{channel.name}</span>
     </button>
   )
 }

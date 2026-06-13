@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/field"
 import { createClient } from "@/lib/supabase"
 import { useAppStore } from "@/lib/store"
+import { joinServerAction } from "@/lib/queries"
 
 // ─── Create Server Modal ───────────────────────────────────────
 
@@ -138,51 +139,17 @@ export function JoinServerModal({
 
     setLoading(true)
     setError(null)
-    const supabase = createClient()
-
-    // Find server by invite code
-    const { data: server, error: serverError } = await supabase
-      .from("servers")
-      .select("*")
-      .eq("invite_code", code.trim())
-      .single()
-
-    if (serverError || !server) {
-      setError("Invalid invite code. Please check and try again.")
+    
+    try {
+      const server = await joinServerAction(code.trim(), currentUser.id)
+      setServers([...servers, server as any])
+      setCode("")
+      onOpenChange(false)
+    } catch (err: any) {
+      setError(err.message || "Failed to join server")
+    } finally {
       setLoading(false)
-      return
     }
-
-    // Check if already a member
-    const { data: existing } = await supabase
-      .from("server_members")
-      .select("id")
-      .eq("server_id", server.id)
-      .eq("user_id", currentUser.id)
-      .single()
-
-    if (existing) {
-      setError("You are already a member of this server")
-      setLoading(false)
-      return
-    }
-
-    // Add member
-    const { error: joinError } = await supabase.from("server_members").insert({
-      server_id: server.id,
-      user_id: currentUser.id,
-    })
-
-    if (joinError) {
-      setError(joinError.message)
-      setLoading(false)
-      return
-    }
-
-    setServers([...servers, server])
-    setCode("")
-    setLoading(false)
-    onOpenChange(false)
   }
 
   return (

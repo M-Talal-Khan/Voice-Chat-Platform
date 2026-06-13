@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Radio, Eye, EyeOff } from "lucide-react"
+import { Radio, Eye, EyeOff, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -61,23 +61,27 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md">
+    <div className="relative flex min-h-svh items-center justify-center bg-background px-4 py-10 overflow-hidden">
+      {/* Background effects */}
+      <div className="hero-glow -top-60 left-1/2 -translate-x-1/2 opacity-40" />
+      <div className="hero-glow bottom-0 -right-40 opacity-20" style={{ animationDelay: "3s" }} />
+
+      <div className="relative z-10 w-full max-w-md animate-fade-in-up">
         <Link
           href="/"
-          className="mb-8 flex items-center justify-center gap-2"
+          className="mb-8 flex items-center justify-center gap-2 group"
         >
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
             <Radio className="size-5" />
           </span>
-          <span className="text-xl font-semibold tracking-tight">NexTalk</span>
+          <span className="text-xl font-semibold tracking-tight">Thiscord</span>
         </Link>
 
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-xl sm:p-8">
+        <div className="glass-strong rounded-2xl p-6 shadow-2xl shadow-black/20 sm:p-8">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Welcome to Thiscord</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Log in to jump back into your servers.
+              totally original. we promise.
             </p>
           </div>
 
@@ -128,14 +132,21 @@ function LoginForm() {
               {error && (
                 <div
                   role="alert"
-                  className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive animate-in fade-in slide-in-from-top-1"
                 >
                   {error}
                 </div>
               )}
 
-              <Button type="submit" size="lg" className="w-full" disabled={loading}>
-                {loading ? "Logging in..." : "Log in"}
+              <Button type="submit" size="lg" className="w-full shadow-lg shadow-primary/20" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Logging in...
+                  </>
+                ) : (
+                  "Log in"
+                )}
               </Button>
             </FieldGroup>
           </form>

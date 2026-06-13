@@ -1,6 +1,6 @@
-# NexTalk — Voice & Text Chat Platform
+# Thiscord — Voice & Text Chat Platform
 
-NexTalk is a fully functional Discord/TeamSpeak-like voice and text chat web application built with Next.js, Supabase, and LiveKit. Create servers, hop into voice channels, send direct messages, and stay connected with your community.
+Thiscord is a fully functional Discord/TeamSpeak-like voice and text chat web application built with Next.js, Supabase, and LiveKit. Create servers, hop into voice channels, send direct messages, and stay connected with your community.
 
 ## Tech Stack
 

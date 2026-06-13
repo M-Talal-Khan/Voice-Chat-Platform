@@ -29,56 +29,54 @@ export async function fetchLiveKitToken(
   }
 }
 
-export function VoiceRoom({
+function VoiceStateSync() {
+  const { micOn, deafened } = useAppStore()
+  const { localParticipant } = useLocalParticipant()
+
+  useEffect(() => {
+    if (localParticipant) {
+      // Deafen also mutes your mic automatically
+      localParticipant.setMicrophoneEnabled(micOn && !deafened)
+    }
+  }, [localParticipant, micOn, deafened])
+
+  return null
+}
+
+export function VoiceProvider({
   roomName,
   username,
   onDisconnected,
+  children,
 }: {
-  roomName: string
+  roomName: string | null
   username: string
   onDisconnected: () => void
+  children: React.ReactNode
 }) {
-  const [token, setToken] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [token, setToken] = useState<string | undefined>(undefined)
+  const { deafened, micOn } = useAppStore()
 
   useEffect(() => {
-    fetchLiveKitToken(roomName, username).then((t) => {
-      if (t) {
-        setToken(t)
-      } else {
-        setError("Failed to get LiveKit token. Check your LiveKit configuration.")
-      }
-      setLoading(false)
-    })
+    if (!roomName) {
+      setToken(undefined)
+      return
+    }
+    fetchLiveKitToken(roomName, username).then((t) => setToken(t ?? undefined))
   }, [roomName, username])
-
-  if (loading) {
-    return (
-      <div className="mx-2 mb-1 rounded-md bg-background/40 px-2 py-1.5 text-xs text-muted-foreground">
-        Connecting to voice channel...
-      </div>
-    )
-  }
-
-  if (error || !token) {
-    return (
-      <div className="mx-2 mb-1 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
-        {error ?? "Failed to connect"}
-      </div>
-    )
-  }
 
   return (
     <LiveKitRoom
       serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
       token={token}
-      connect={true}
+      connect={!!roomName && !!token}
       onDisconnected={onDisconnected}
-      audio={true}
-      style={{ display: "none" }}
+      audio={micOn && !deafened} // Initial connection state
+      className="flex flex-1 flex-col"
     >
-      <RoomAudioRenderer />
+      {!deafened && <RoomAudioRenderer />}
+      <VoiceStateSync />
+      {children}
     </LiveKitRoom>
   )
 }

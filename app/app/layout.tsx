@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ServerRail } from "@/components/app/server-rail"
-import { ChannelSidebar } from "@/components/app/channel-sidebar"
-import { DmSidebar } from "@/components/app/dm-sidebar"
-import { VoiceRoom } from "@/components/app/voice-provider"
-import { UserSettings } from "@/components/app/user-settings"
-import { ToastContainer } from "@/components/app/toast-container"
-import { ErrorBoundary } from "@/components/app/error-boundary"
+import { ServerRail } from "@/components/layout/server-rail"
+import { ChannelSidebar } from "@/components/layout/channel-sidebar"
+import { DmSidebar } from "@/components/layout/dm-sidebar"
+import { VoiceProvider } from "@/components/features/voice-provider"
+import { UserSettings } from "@/components/features/user-settings"
+import { ToastContainer } from "@/components/layout/toast-container"
+import { ErrorBoundary } from "@/components/features/error-boundary"
 import {
   CreateServerModal,
   JoinServerModal,
   CreateChannelModal,
   ServerInfoModal,
   DeleteServerModal,
-} from "@/components/app/modals"
+} from "@/components/features/modals"
 import {
   Dialog,
   DialogContent,
@@ -148,6 +148,7 @@ export default function AppLayout({
           setMembers(memberData as any)
         }
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServer?.id])
 
   function handleSelectServer(serverId: string) {
@@ -324,24 +325,25 @@ export default function AppLayout({
       )}
 
       {/* Main Content */}
-      <main className="flex flex-1 flex-col bg-chat">
-        <ErrorBoundary>{children}</ErrorBoundary>
-      </main>
+      <VoiceProvider
+        roomName={
+          connectedVoiceChannelId && selectedServer
+            ? `server-${selectedServer.id}-channel-${connectedVoiceChannelId}`
+            : null
+        }
+        username={currentUser?.username ?? "Anonymous"}
+        onDisconnected={() => setConnectedVoiceChannelId(null)}
+      >
+        <main className="flex flex-1 flex-col bg-chat relative z-0">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </main>
+      </VoiceProvider>
 
       {/* User Settings */}
       <UserSettings open={showUserSettings} onOpenChange={setShowUserSettings} />
 
       {/* Toast notifications */}
       <ToastContainer />
-
-      {/* Voice Room (hidden, manages connection) */}
-      {connectedVoiceChannelId && currentUser && selectedServer && (
-        <VoiceRoom
-          roomName={`server-${selectedServer.id}-channel-${connectedVoiceChannelId}`}
-          username={currentUser.username}
-          onDisconnected={() => setConnectedVoiceChannelId(null)}
-        />
-      )}
 
       {/* Modals */}
       <CreateServerModal open={showCreateServer} onOpenChange={setShowCreateServer} />

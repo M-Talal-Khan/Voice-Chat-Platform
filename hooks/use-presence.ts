@@ -10,6 +10,7 @@ export function usePresence() {
 
   useEffect(() => {
     if (!currentUser) return
+    const userId = currentUser.id
 
     const supabase = createClient()
 
@@ -17,7 +18,7 @@ export function usePresence() {
     supabase
       .from("profiles")
       .update({ status: "online" })
-      .eq("id", currentUser.id)
+      .eq("id", userId)
       .then(() => {
         setCurrentUser({ ...currentUser, status: "online" } as any)
       })
@@ -26,7 +27,7 @@ export function usePresence() {
     const channel = supabase.channel("online-users", {
       config: {
         presence: {
-          key: currentUser.id,
+          key: userId,
         },
       },
     })
@@ -44,7 +45,7 @@ export function usePresence() {
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel.track({
-            user_id: currentUser.id,
+            user_id: userId,
             username: currentUser.username,
             online_at: new Date().toISOString(),
           })
@@ -58,7 +59,7 @@ export function usePresence() {
       supabase
         .from("profiles")
         .update({ status: "offline" })
-        .eq("id", currentUser.id)
+        .eq("id", userId)
 
       channel.untrack()
     }
@@ -70,10 +71,11 @@ export function usePresence() {
       supabase
         .from("profiles")
         .update({ status: "offline" })
-        .eq("id", currentUser.id)
+        .eq("id", userId)
       channel.untrack()
       supabase.removeChannel(channel)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id])
 }
 
@@ -85,14 +87,14 @@ export function useUnreadNotifications() {
     const total = messages.length + dmMessages.length
 
     if (total > 0) {
-      document.title = `(${total}) NexTalk`
+      document.title = `(${total}) Thiscord`
     } else {
-      document.title = "NexTalk"
+      document.title = "Thiscord"
     }
 
     // Clear on focus
     function handleFocus() {
-      document.title = "NexTalk"
+      document.title = "Thiscord"
     }
 
     window.addEventListener("focus", handleFocus)

@@ -16,6 +16,8 @@ export function ServerRail({
   onSelectServer,
   onAddServer,
   onExploreServers,
+  onOpenDm,
+  dmActive,
 }: {
   servers: Server[]
   activeServerId: string | null
@@ -41,7 +43,7 @@ export function ServerRail({
         >
           <Radio className="size-6" />
         </TooltipTrigger>
-        <TooltipContent side="right">NexTalk Home</TooltipContent>
+        <TooltipContent side="right">Thiscord Home</TooltipContent>
       </Tooltip>
 
       {onOpenDm && (

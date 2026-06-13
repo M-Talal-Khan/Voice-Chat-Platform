@@ -11,10 +11,13 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'NexTalk — Voice & Text Chat for Communities',
-  description:
-    'NexTalk is a TeamSpeak and Discord style voice and text chat app for your community. Create servers, hop into voice channels, and stay connected.',
-  generator: 'v0.app',
+  title: 'Thiscord',
+  description: 'Thiscord - totally not Discord. Voice and text chat for people with taste.',
+  keywords: 'voice chat, text chat, thiscord, totally original, not discord',
+  openGraph: {
+    title: 'Thiscord',
+    description: 'totally not Discord',
+  },
 }
 
 export const viewport: Viewport = {
