@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Profile, Server, Channel, Message, ServerMember } from "@/lib/types"
+import type { Profile, Server, Channel, Message, ServerMember, DirectMessage } from "@/lib/types"
 
 interface AppState {
   // User
@@ -30,6 +30,15 @@ interface AppState {
   // Members
   members: ServerMember[]
   setMembers: (members: ServerMember[]) => void
+
+  // Direct Messages
+  dmView: boolean
+  setDmView: (view: boolean) => void
+  selectedDmUser: Profile | null
+  setSelectedDmUser: (user: Profile | null) => void
+  dmMessages: DirectMessage[]
+  setDmMessages: (messages: DirectMessage[]) => void
+  addDmMessage: (message: DirectMessage) => void
 
   // Voice
   connectedVoiceChannelId: string | null
@@ -101,6 +110,16 @@ export const useAppStore = create<AppState>((set) => ({
   members: [],
   setMembers: (members) => set({ members }),
 
+  // Direct Messages
+  dmView: false,
+  setDmView: (view) => set({ dmView: view }),
+  selectedDmUser: null,
+  setSelectedDmUser: (user) => set({ selectedDmUser: user }),
+  dmMessages: [],
+  setDmMessages: (messages) => set({ dmMessages: messages }),
+  addDmMessage: (message) =>
+    set((state) => ({ dmMessages: [...state.dmMessages, message] })),
+
   // Voice
   connectedVoiceChannelId: null,
   setConnectedVoiceChannelId: (id) => set({ connectedVoiceChannelId: id }),
@@ -109,3 +128,4 @@ export const useAppStore = create<AppState>((set) => ({
   deafened: false,
   setDeafened: (on) => set({ deafened: on }),
 }))
+

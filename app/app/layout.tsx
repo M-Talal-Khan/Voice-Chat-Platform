@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ServerRail } from "@/components/app/server-rail"
 import { ChannelSidebar } from "@/components/app/channel-sidebar"
+import { DmSidebar } from "@/components/app/dm-sidebar"
+import { VoiceRoom } from "@/components/app/voice-provider"
 import {
   CreateServerModal,
   JoinServerModal,
@@ -28,7 +30,6 @@ import {
 } from "@/components/ui/field"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
-import { VoiceRoom } from "@/components/app/voice-provider"
 import { Plus } from "lucide-react"
 import type { Server, Channel } from "@/lib/types"
 
@@ -58,6 +59,10 @@ export default function AppLayout({
     deafened,
     setDeafened,
     setMessages,
+    dmView,
+    setDmView,
+    setSelectedDmUser,
+    selectedDmUser,
   } = useAppStore()
 
   const [loading, setLoading] = useState(true)
@@ -80,7 +85,6 @@ export default function AppLayout({
         return
       }
 
-      // Fetch profile
       supabase
         .from("profiles")
         .select("*")
@@ -92,7 +96,6 @@ export default function AppLayout({
           }
         })
 
-      // Fetch servers the user is a member of
       supabase
         .from("server_members")
         .select("server:servers(*)")
@@ -146,6 +149,8 @@ export default function AppLayout({
   function handleSelectServer(serverId: string) {
     const server = servers.find((s) => s.id === serverId)
     if (server) {
+      setDmView(false)
+      setSelectedDmUser(null)
       setSelectedServer(server)
     }
   }
@@ -164,6 +169,16 @@ export default function AppLayout({
 
   function handleLeaveVoice() {
     setConnectedVoiceChannelId(null)
+  }
+
+  function handleOpenDm() {
+    setDmView(true)
+    setSelectedServer(null)
+    setSelectedChannel(null)
+    setChannels([])
+    setMembers([])
+    setMessages([])
+    setSelectedDmUser(null)
   }
 
   async function handleLeaveServer() {
@@ -266,10 +281,15 @@ export default function AppLayout({
         onSelectServer={handleSelectServer}
         onAddServer={() => setShowCreateServer(true)}
         onExploreServers={() => setShowJoinServer(true)}
+        onOpenDm={handleOpenDm}
+        dmActive={dmView}
       />
 
+      {/* DM Sidebar */}
+      {dmView && <DmSidebar />}
+
       {/* Channel Sidebar */}
-      {selectedServer && (
+      {!dmView && selectedServer && (
         <ChannelSidebar
           server={selectedServer as any}
           channels={channels}
@@ -283,8 +303,8 @@ export default function AppLayout({
           deafened={deafened}
           onToggleDeafen={() => setDeafened(!deafened)}
           onOpenServerSettings={() => {
-            setServerSettingsName(selectedServer.name);
-            setShowServerSettings(true);
+            setServerSettingsName(selectedServer.name)
+            setShowServerSettings(true)
           }}
           onOpenUserSettings={() => {}}
           onOpenCreateChannel={() => setShowCreateChannel(true)}
@@ -318,21 +338,17 @@ export default function AppLayout({
             onOpenChange={setShowCreateChannel}
             serverId={selectedServer.id}
           />
-
           <ServerInfoModal
             open={showServerInfo}
             onOpenChange={setShowServerInfo}
             server={selectedServer}
           />
-
           <DeleteServerModal
             open={showDeleteServer}
             onOpenChange={setShowDeleteServer}
             serverName={selectedServer.name}
             onConfirm={handleDeleteServer}
           />
-
-          {/* Server Settings Dialog */}
           <Dialog open={showServerSettings} onOpenChange={setShowServerSettings}>
             <DialogContent>
               <DialogHeader>

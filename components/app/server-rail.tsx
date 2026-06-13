@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Compass, Radio } from "lucide-react"
+import { Plus, Compass, Radio, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import {
   Tooltip,
@@ -22,6 +22,8 @@ export function ServerRail({
   onSelectServer: (id: string) => void
   onAddServer?: () => void
   onExploreServers?: () => void
+  onOpenDm?: () => void
+  dmActive?: boolean
 }) {
   return (
     <nav
@@ -42,7 +44,30 @@ export function ServerRail({
         <TooltipContent side="right">NexTalk Home</TooltipContent>
       </Tooltip>
 
-      <div className="my-1 h-px w-8 bg-border" />
+      {onOpenDm && (
+        <>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onOpenDm}
+                  className={cn(
+                    "flex size-12 items-center justify-center transition-all",
+                    dmActive
+                      ? "rounded-2xl bg-primary text-primary-foreground"
+                      : "rounded-3xl bg-secondary text-secondary-foreground hover:rounded-2xl",
+                  )}
+                />
+              }
+            >
+              <MessageSquare className="size-5" />
+            </TooltipTrigger>
+            <TooltipContent side="right">Direct Messages</TooltipContent>
+          </Tooltip>
+          <div className="my-1 h-px w-8 bg-border" />
+        </>
+      )}
 
       <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto no-scrollbar">
         {servers.map((server) => (
