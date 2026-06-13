@@ -1,7 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Hash } from "lucide-react"
+import { useEffect, useRef, useState, useCallback } from "react"
+import {
+  Hash,
+  Volume2,
+  Send,
+  Pencil,
+  Trash2,
+  Reply,
+  SmilePlus,
+  X,
+  Loader2,
+  ChevronDown,
+} from "lucide-react"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import type { Message } from "@/lib/types"
@@ -33,59 +44,56 @@ export default function AppPage() {
             <span className="text-[var(--color-online)]">●</span> Voice Channel
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            You are in <strong>{selectedChannel.name}</strong>
+            Connected to <strong>{selectedChannel.name}</strong>
           </p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-        <Hash className="size-4 text-muted-foreground" />
-        <span className="font-semibold">{selectedChannel.name}</span>
-        {selectedChannel.topic && (
-          <>
-            <span className="mx-1 h-4 w-px bg-border/60" />
-            <span className="truncate text-xs text-muted-foreground">
-              {selectedChannel.topic}
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <ChatMessages channelId={selectedChannel.id} />
-      </div>
-
-      {/* Message input */}
-      <ChatInput channelId={selectedChannel.id} />
-    </div>
-  )
+  return <ChatView channelId={selectedChannel.id} channelName={selectedChannel.name} channelTopic={selectedChannel.topic ?? undefined} />
 }
 
-function ChatMessages({ channelId }: { channelId: string }) {
-  const { messages, setMessages } = useAppStore()
+// ─── Chat View ──────────────────────────────────────────────────
 
+function ChatView({
+  channelId,
+  channelName,
+  channelTopic,
+}: {
+  channelId: string
+  channelName: string
+  channelTopic?: string
+}) {
+  const { messages, setMessages } = useAppStore()
+  const [loading, setLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+
+  // Fetch messages
   useEffect(() => {
+    setLoading(true)
     const supabase = createClient()
 
     supabase
       .from("messages")
       .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
       .eq("channel_id", channelId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data }) => {
         if (data) {
-          setMessages(data as any)
+          setMessages((data as any).reverse())
+          setHasMore(data.length === 50)
         }
+        setLoading(false)
       })
 
-    // Subscribe to realtime changes
+    // Realtime subscription
     const channel = supabase
       .channel(`messages:${channelId}`)
       .on(
@@ -135,70 +143,377 @@ function ChatMessages({ channelId }: { channelId: string }) {
 
     return () => {
       supabase.removeChannel(channel)
+      setMessages([])
     }
   }, [channelId, setMessages])
 
-  if (messages.length === 0) {
+  // Auto scroll to bottom on new messages
+  useEffect(() => {
+    if (autoScroll && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [messages.length, autoScroll])
+
+  // Track scroll position
+  function handleScroll() {
+    if (!scrollRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+    setAutoScroll(scrollHeight - scrollTop - clientHeight < 100)
+  }
+
+  // Load more messages
+  async function loadMore() {
+    if (!hasMore || messages.length === 0) return
+    const supabase = createClient()
+    const oldest = messages[0]
+
+    const { data } = await supabase
+      .from("messages")
+      .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
+      .eq("channel_id", channelId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(50)
+
+    if (data && data.length > 0) {
+      const existing = useAppStore.getState().messages
+      useAppStore.getState().setMessages([...data.reverse(), ...existing])
+      setHasMore(data.length === 50)
+    } else {
+      setHasMore(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+        <Hash className="size-4 text-muted-foreground" />
+        <span className="font-semibold">{channelName}</span>
+        {channelTopic && (
+          <>
+            <span className="mx-1 h-4 w-px bg-border/60" />
+            <span className="truncate text-xs text-muted-foreground">
+              {channelTopic}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-4"
+      >
+        {loading ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sm text-muted-foreground">
+              No messages yet. Start the conversation!
+            </p>
+          </div>
+        ) : (
+          <>
+            {hasMore && (
+              <div className="mb-4 text-center">
+                <button
+                  onClick={loadMore}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Load older messages
+                </button>
+              </div>
+            )}
+            <div className="space-y-1">
+              {messages.map((message, i) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  isFirst={i === 0 || messages[i - 1]?.user_id !== message.user_id}
+                  onReply={(msg) => {
+                    setReplyTo(msg)
+                  }}
+                />
+              ))}
+            </div>
+            <div ref={bottomRef} />
+          </>
+        )}
+      </div>
+
+      {/* New messages indicator */}
+      {!autoScroll && !loading && (
+        <button
+          onClick={() => {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+            setAutoScroll(true)
+          }}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs text-primary-foreground shadow-lg"
+        >
+          <ChevronDown className="size-3 inline" /> New messages
+        </button>
+      )}
+
+      {/* Reply preview */}
+      {replyTo && (
+        <div className="flex items-center gap-2 border-t border-border/60 bg-muted/50 px-4 py-1.5">
+          <Reply className="size-3 text-muted-foreground shrink-0" />
+          <div className="flex-1 truncate text-xs text-muted-foreground">
+            Replying to <span className="font-medium text-foreground">{replyTo.profile?.username ?? "Unknown"}</span>:{" "}
+            {replyTo.content.slice(0, 80)}
+          </div>
+          <button onClick={() => setReplyTo(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
+
+      {/* Chat Input */}
+      <ChatInput channelId={channelId} replyTo={replyTo} onReplyClear={() => setReplyTo(null)} />
+    </div>
+  )
+}
+
+// ─── Message Bubble ─────────────────────────────────────────────
+
+const EMOJIS = ["👍", "❤️", "😂", "🔥", "🚀", "🎉", "💯", "👀"]
+
+function MessageBubble({
+  message,
+  isFirst,
+  onReply,
+}: {
+  message: Message
+  isFirst: boolean
+  onReply: (msg: Message) => void
+}) {
+  const { currentUser, updateMessage, deleteMessage } = useAppStore()
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState(message.content)
+  const [showEmojis, setShowEmojis] = useState(false)
+  const editRef = useRef<HTMLInputElement>(null)
+  const supabase = createClient()
+  const isOwner = currentUser?.id === message.user_id
+
+  const initials = message.profile?.username?.slice(0, 2).toUpperCase() ?? "??"
+  const time = message.created_at
+    ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : ""
+
+  // Group reactions by emoji
+  const groupedReactions = (message.reactions ?? []).reduce(
+    (acc, r) => {
+      const existing = acc.find((g) => g.emoji === r.emoji)
+      if (existing) {
+        existing.count++
+        if (r.user_id === currentUser?.id) existing.reacted = true
+      } else {
+        acc.push({ emoji: r.emoji, count: 1, reacted: r.user_id === currentUser?.id })
+      }
+      return acc
+    },
+    [] as { emoji: string; count: number; reacted: boolean }[],
+  )
+
+  async function handleSaveEdit() {
+    if (!editContent.trim() || editContent === message.content) {
+      setEditing(false)
+      return
+    }
+    await supabase
+      .from("messages")
+      .update({ content: editContent.trim(), edited: true })
+      .eq("id", message.id)
+    updateMessage(message.id, { content: editContent.trim(), edited: true } as any)
+    setEditing(false)
+  }
+
+  async function handleDelete() {
+    await supabase.from("messages").delete().eq("id", message.id)
+    deleteMessage(message.id)
+  }
+
+  async function handleReaction(emoji: string) {
+    const existing = (message.reactions ?? []).find(
+      (r) => r.emoji === emoji && r.user_id === currentUser?.id,
+    )
+    if (existing) {
+      await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("message_id", message.id)
+        .eq("user_id", currentUser?.id)
+        .eq("emoji", emoji)
+      useAppStore.getState().removeReaction(message.id, emoji, currentUser?.id ?? "")
+    } else {
+      await supabase.from("message_reactions").insert({
+        message_id: message.id,
+        user_id: currentUser?.id,
+        emoji,
+      })
+      useAppStore.getState().addReaction(message.id, { emoji, userId: currentUser?.id ?? "" })
+    }
+  }
+
+  if (editing) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">
-          No messages yet. Start the conversation!
-        </p>
+      <div className="flex items-start gap-3 px-2 py-1">
+        <div className="flex-1">
+          <input
+            ref={editRef}
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus-visible:border-ring"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveEdit()
+              if (e.key === "Escape") setEditing(false)
+            }}
+            autoFocus
+          />
+          <div className="mt-1 flex gap-2 text-xs text-muted-foreground">
+            <span>escape to cancel • enter to save</span>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-2">
-      {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
-    </div>
-  )
-}
+    <div className="group relative flex items-start gap-3 rounded-md px-2 py-0.5 transition-colors hover:bg-background/30">
+      {/* Avatar or spacer */}
+      {isFirst ? (
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+          {initials}
+        </span>
+      ) : (
+        <span className="invisible flex size-9 shrink-0 items-center justify-center text-[10px] text-muted-foreground group-hover:visible">
+          {time}
+        </span>
+      )}
 
-function MessageBubble({ message }: { message: Message }) {
-  const initials = message.profile?.username
-    ? message.profile.username.slice(0, 2).toUpperCase()
-    : "??"
-
-  const time = message.created_at
-    ? new Date(message.created_at).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : ""
-
-  return (
-    <div className="group flex items-start gap-3 rounded-md px-2 py-1 transition-colors hover:bg-background/30">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-        {initials}
-      </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">
-            {message.profile?.username ?? "Unknown"}
-          </span>
-          <span className="text-[11px] text-muted-foreground">{time}</span>
-          {message.edited && (
-            <span className="text-[11px] text-muted-foreground">(edited)</span>
+        {isFirst && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-medium">{message.profile?.username ?? "Unknown"}</span>
+            <span className="text-[11px] text-muted-foreground">{time}</span>
+            {message.edited && <span className="text-[11px] text-muted-foreground">(edited)</span>}
+          </div>
+        )}
+        <p className="text-sm leading-relaxed text-foreground/90">{message.content}</p>
+
+        {/* Reactions */}
+        {groupedReactions.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {groupedReactions.map((g) => (
+              <button
+                key={g.emoji}
+                onClick={() => handleReaction(g.emoji)}
+                className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-xs transition-colors ${
+                  g.reacted
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:border-primary/50"
+                }`}
+              >
+                {g.emoji} {g.count}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Reply preview */}
+        {message.reply_to && (
+          <div className="mt-1 flex items-center gap-1.5 border-l-2 border-muted-foreground/30 pl-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {message.reply_to.profile?.username ?? "Unknown"}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {message.reply_to.content.slice(0, 60)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Hover actions */}
+      <div className="invisible absolute -top-3 right-2 flex items-center gap-0.5 rounded-lg border border-border bg-card shadow-sm group-hover:visible">
+        <button
+          onClick={() => onReply(message)}
+          className="rounded p-1 text-muted-foreground hover:text-foreground"
+          title="Reply"
+        >
+          <Reply className="size-3.5" />
+        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowEmojis(!showEmojis)}
+            className="rounded p-1 text-muted-foreground hover:text-foreground"
+            title="React"
+          >
+            <SmilePlus className="size-3.5" />
+          </button>
+          {showEmojis && (
+            <div className="absolute top-full left-0 z-50 mt-1 flex gap-0.5 rounded-lg border border-border bg-card p-1 shadow-lg">
+              {EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    handleReaction(emoji)
+                    setShowEmojis(false)
+                  }}
+                  className="rounded p-1 text-sm hover:bg-muted"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-        <p className="mt-0.5 text-sm leading-relaxed text-foreground/90">
-          {message.content}
-        </p>
+        {isOwner && (
+          <>
+            <button
+              onClick={() => {
+                setEditContent(message.content)
+                setEditing(true)
+              }}
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              title="Edit"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="rounded p-1 text-muted-foreground hover:text-destructive"
+              title="Delete"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-function ChatInput({ channelId }: { channelId: string }) {
+// ─── Chat Input ─────────────────────────────────────────────────
+
+function ChatInput({
+  channelId,
+  replyTo,
+  onReplyClear,
+}: {
+  channelId: string
+  replyTo: Message | null
+  onReplyClear: () => void
+}) {
   const [content, setContent] = useState("")
   const [sending, setSending] = useState(false)
-  const { currentUser } = useAppStore()
+  const { currentUser, selectedChannel } = useAppStore()
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSend(e?: React.FormEvent) {
+    e?.preventDefault()
     if (!content.trim() || sending || !currentUser) return
 
     setSending(true)
@@ -208,10 +523,12 @@ function ChatInput({ channelId }: { channelId: string }) {
       channel_id: channelId,
       user_id: currentUser.id,
       content: content.trim(),
+      reply_to_id: replyTo?.id ?? null,
     })
 
     if (!error) {
       setContent("")
+      onReplyClear()
     }
     setSending(false)
   }
@@ -223,16 +540,20 @@ function ChatInput({ channelId }: { channelId: string }) {
           type="text"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder={`Message #${useAppStore.getState().selectedChannel?.name ?? "channel"}`}
+          placeholder={`Message #${selectedChannel?.name ?? "channel"}`}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           disabled={sending}
         />
         <button
           type="submit"
           disabled={!content.trim() || sending}
-          className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="rounded-md bg-primary p-1.5 text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          Send
+          {sending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Send className="size-4" />
+          )}
         </button>
       </div>
     </form>
