@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/field"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
+import { VoiceRoom } from "@/components/app/voice-provider"
 import { Plus } from "lucide-react"
 import type { Server, Channel } from "@/lib/types"
 
@@ -296,6 +297,15 @@ export default function AppLayout({
 
       {/* Main Content */}
       <main className="flex flex-1 flex-col bg-chat">{children}</main>
+
+      {/* Voice Room (hidden, manages connection) */}
+      {connectedVoiceChannelId && currentUser && selectedServer && (
+        <VoiceRoom
+          roomName={`server-${selectedServer.id}-channel-${connectedVoiceChannelId}`}
+          username={currentUser.username}
+          onDisconnected={() => setConnectedVoiceChannelId(null)}
+        />
+      )}
 
       {/* Modals */}
       <CreateServerModal open={showCreateServer} onOpenChange={setShowCreateServer} />
