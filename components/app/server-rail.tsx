@@ -8,16 +8,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { servers, type Server } from "@/lib/mock-data"
+import type { Server } from "@/lib/types"
 
 export function ServerRail({
+  servers,
   activeServerId,
   onSelectServer,
   onAddServer,
+  onExploreServers,
 }: {
-  activeServerId: string
+  servers: Server[]
+  activeServerId: string | null
   onSelectServer: (id: string) => void
-  onAddServer: () => void
+  onAddServer?: () => void
+  onExploreServers?: () => void
 }) {
   return (
     <nav
@@ -35,7 +39,7 @@ export function ServerRail({
         >
           <Radio className="size-6" />
         </TooltipTrigger>
-        <TooltipContent side="right">Resonate Home</TooltipContent>
+        <TooltipContent side="right">NexTalk Home</TooltipContent>
       </Tooltip>
 
       <div className="my-1 h-px w-8 bg-border" />
@@ -50,34 +54,39 @@ export function ServerRail({
           />
         ))}
 
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={onAddServer}
-                className="flex size-12 items-center justify-center rounded-3xl bg-secondary text-[var(--color-online)] transition-all hover:rounded-2xl hover:bg-[var(--color-online)] hover:text-primary-foreground"
-              />
-            }
-          >
-            <Plus className="size-6" />
-          </TooltipTrigger>
-          <TooltipContent side="right">Add a server</TooltipContent>
-        </Tooltip>
+        {onAddServer && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onAddServer}
+                  className="flex size-12 items-center justify-center rounded-3xl bg-secondary text-[var(--color-online)] transition-all hover:rounded-2xl hover:bg-[var(--color-online)] hover:text-primary-foreground"
+                />
+              }
+            >
+              <Plus className="size-6" />
+            </TooltipTrigger>
+            <TooltipContent side="right">Add a server</TooltipContent>
+          </Tooltip>
+        )}
 
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                className="flex size-12 items-center justify-center rounded-3xl bg-secondary text-[var(--color-online)] transition-all hover:rounded-2xl hover:bg-[var(--color-online)] hover:text-primary-foreground"
-              />
-            }
-          >
-            <Compass className="size-6" />
-          </TooltipTrigger>
-          <TooltipContent side="right">Explore servers</TooltipContent>
-        </Tooltip>
+        {onExploreServers && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onExploreServers}
+                  className="flex size-12 items-center justify-center rounded-3xl bg-secondary text-[var(--color-online)] transition-all hover:rounded-2xl hover:bg-[var(--color-online)] hover:text-primary-foreground"
+                />
+              }
+            >
+              <Compass className="size-6" />
+            </TooltipTrigger>
+            <TooltipContent side="right">Explore servers</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </nav>
   )
@@ -92,6 +101,13 @@ function ServerIcon({
   active: boolean
   onClick: () => void
 }) {
+  const acronym = server.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -108,7 +124,7 @@ function ServerIcon({
         <span
           className={cn(
             "absolute -left-3 w-1 rounded-r-full bg-foreground transition-all",
-            active ? "h-8" : server.unread ? "h-2" : "h-0 group-hover:h-4",
+            active ? "h-8" : "h-0 group-hover:h-4",
           )}
         />
         <span
@@ -119,10 +135,10 @@ function ServerIcon({
               : "rounded-3xl text-secondary-foreground hover:rounded-2xl",
           )}
           style={{
-            backgroundColor: active ? server.color : "var(--color-secondary)",
+            backgroundColor: active ? "var(--color-primary)" : "var(--color-secondary)",
           }}
         >
-          {server.acronym}
+          {acronym}
         </span>
       </TooltipTrigger>
       <TooltipContent side="right">{server.name}</TooltipContent>

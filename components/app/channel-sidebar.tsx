@@ -14,23 +14,30 @@ import {
   Headphones,
   HeadphoneOff,
   PhoneOff,
+  LogOut,
+  Users,
+  Trash2,
 } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { UserAvatar } from "@/components/app/user-avatar"
-import {
-  currentUser,
-  users,
-  statusLabel,
-  type Channel,
-  type Server,
-} from "@/lib/mock-data"
+import { useAppStore } from "@/lib/store"
+import { createClient } from "@/lib/supabase"
+import type { Channel, Server, Profile, ServerMember } from "@/lib/types"
 
 export function ChannelSidebar({
   server,
@@ -60,8 +67,15 @@ export function ChannelSidebar({
   onToggleDeafen: () => void
   onOpenServerSettings: () => void
   onOpenUserSettings: () => void
+  onOpenCreateChannel?: () => void
+  onOpenInvite?: () => void
+  onOpenServerSettings?: () => void
+  onLeaveServer?: () => void
+  onDeleteServer?: () => void
+  isOwner?: boolean
 }) {
   const [query, setQuery] = useState("")
+  const { currentUser, setCurrentUser, members, setMessages } = useAppStore()
 
   const filtered = channels.filter((c) =>
     c.name.toLowerCase().includes(query.toLowerCase()),
@@ -69,17 +83,67 @@ export function ChannelSidebar({
   const textChannels = filtered.filter((c) => c.type === "text")
   const voiceChannels = filtered.filter((c) => c.type === "voice")
 
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    setCurrentUser(null)
+    setMessages([])
+    window.location.href = "/auth/login"
+  }
+
+  const [showServerMenu, setShowServerMenu] = useState(false)
+
+  const onlineMembers = members.filter(
+    (m) => m.profile?.status === "online" || m.profile?.status === "idle" || m.profile?.status === "dnd",
+  )
+  const offlineMembers = members.filter(
+    (m) => m.profile?.status === "offline" || !m.profile?.status,
+  )
+
   return (
     <div className="flex h-full w-60 shrink-0 flex-col bg-channels">
-      {/* Server header */}
-      <button
-        type="button"
-        onClick={onOpenServerSettings}
-        className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-4 text-left transition-colors hover:bg-secondary/50"
-      >
-        <span className="truncate font-semibold">{server.name}</span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-      </button>
+      {/* Server header dropdown */}
+      <DropdownMenu open={showServerMenu} onOpenChange={setShowServerMenu}>
+        <DropdownMenuTrigger render={<button type="button" className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-4 text-left transition-colors hover:bg-secondary/50 w-full" />}>
+          <span className="truncate font-semibold">{server.name}</span>
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuLabel>{server.name}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => { onOpenInvite?.(); setShowServerMenu(false); }}>
+            <Users className="size-4" />
+            Invite People
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { onOpenCreateChannel?.(); setShowServerMenu(false); }}>
+            <Plus className="size-4" />
+            Create Channel
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => { onOpenServerSettings?.(); setShowServerMenu(false); }}>
+            <Settings className="size-4" />
+            Server Settings
+          </DropdownMenuItem>
+          {onLeaveServer && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { onLeaveServer(); setShowServerMenu(false); }}>
+                <LogOut className="size-4" />
+                Leave Server
+              </DropdownMenuItem>
+              {isOwner && onDeleteServer && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => { onDeleteServer(); setShowServerMenu(false); }}
+                >
+                  <Trash2 className="size-4" />
+                  Delete Server
+                </DropdownMenuItem>
+              )}
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Search */}
       <div className="p-2.5">
@@ -117,6 +181,36 @@ export function ChannelSidebar({
             />
           ))}
         </ChannelSection>
+
+        {/* Members section */}
+        {members.length > 0 && (
+          <div className="mt-4">
+            <div className="px-1.5 py-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                ONLINE — {onlineMembers.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {onlineMembers.slice(0, 10).map((m) => (
+                <MemberRow key={m.id} member={m} />
+              ))}
+            </div>
+            {offlineMembers.length > 0 && (
+              <>
+                <div className="mt-2 px-1.5 py-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    OFFLINE — {offlineMembers.length}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {offlineMembers.slice(0, 5).map((m) => (
+                    <MemberRow key={m.id} member={m} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Voice status (when connected) */}
@@ -147,21 +241,36 @@ export function ChannelSidebar({
 
       {/* User control panel */}
       <div className="flex shrink-0 items-center gap-1 bg-rail/80 px-2 py-2">
-        <button
-          type="button"
-          onClick={onOpenUserSettings}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-secondary/60"
-        >
-          <UserAvatar user={currentUser} size="sm" />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium leading-tight">
-              {currentUser.username}
-            </p>
-            <p className="truncate text-xs leading-tight text-muted-foreground">
-              {currentUser.customStatus ?? statusLabel(currentUser.status)}
-            </p>
-          </div>
-        </button>
+        {currentUser && (
+          <button
+            type="button"
+            onClick={onOpenUserSettings}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left transition-colors hover:bg-secondary/60"
+          >
+            <UserAvatar
+              user={
+                {
+                  id: currentUser.id,
+                  username: currentUser.username,
+                  initials: currentUser.username.slice(0, 2).toUpperCase(),
+                  color: "var(--color-chart-2)",
+                  status: currentUser.status,
+                  customStatus: undefined,
+                  avatar: currentUser.avatar_url ?? undefined,
+                } as any
+              }
+              size="sm"
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium leading-tight">
+                {currentUser.username}
+              </p>
+              <p className="truncate text-xs leading-tight text-muted-foreground">
+                {currentUser.status}
+              </p>
+            </div>
+          </button>
+        )}
 
         <ControlButton
           label={micOn ? "Mute" : "Unmute"}
@@ -181,10 +290,42 @@ export function ChannelSidebar({
             <Headphones className="size-4" />
           )}
         </ControlButton>
+        <ControlButton label="Logout" onClick={handleLogout}>
+          <LogOut className="size-4" />
+        </ControlButton>
         <ControlButton label="User Settings" onClick={onOpenUserSettings}>
           <Settings className="size-4" />
         </ControlButton>
       </div>
+    </div>
+  )
+}
+
+function MemberRow({ member }: { member: ServerMember }) {
+  if (!member.profile) return null
+  const initials = member.profile.username.slice(0, 2).toUpperCase()
+
+  return (
+    <div className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-secondary/40">
+      <span
+        className="inline-block size-2 rounded-full"
+        style={{
+          backgroundColor:
+            member.profile.status === "online"
+              ? "var(--color-online)"
+              : member.profile.status === "idle"
+                ? "var(--color-idle)"
+                : member.profile.status === "dnd"
+                  ? "var(--color-dnd)"
+                  : "var(--color-offline)",
+        }}
+      />
+      <span className="truncate text-foreground/90">{member.profile.username}</span>
+      {member.role !== "member" && (
+        <Badge variant="secondary" className="ml-auto text-[10px]">
+          {member.role}
+        </Badge>
+      )}
     </div>
   )
 }
@@ -231,7 +372,6 @@ function TextChannelRow({
   active: boolean
   onClick: () => void
 }) {
-  const hasUnread = !!channel.unread && !active
   return (
     <button
       type="button"
@@ -240,9 +380,7 @@ function TextChannelRow({
         "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
         active
           ? "bg-secondary text-foreground"
-          : hasUnread
-            ? "text-foreground hover:bg-secondary/60"
-            : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
+          : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
       )}
     >
       <Hash className="size-4 shrink-0 opacity-70" />
@@ -258,15 +396,6 @@ function TextChannelRow({
           />
           <TooltipContent>Notification settings</TooltipContent>
         </Tooltip>
-        {channel.mentions ? (
-          <Badge className="size-5 justify-center rounded-full p-0 text-[10px]">
-            {channel.mentions}
-          </Badge>
-        ) : channel.unread ? (
-          <span className="flex size-5 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-foreground">
-            {channel.unread}
-          </span>
-        ) : null}
       </span>
     </button>
   )
@@ -281,50 +410,20 @@ function VoiceChannelRow({
   connected: boolean
   onJoin: () => void
 }) {
-  const connectedUsers = (channel.connectedUserIds ?? [])
-    .map((id) => users[id])
-    .filter(Boolean)
-
   return (
-    <div className="flex flex-col">
-      <button
-        type="button"
-        onClick={onJoin}
-        className={cn(
-          "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-          connected
-            ? "bg-secondary text-foreground"
-            : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
-        )}
-      >
-        <Volume2 className="size-4 shrink-0 opacity-70" />
-        <span className="truncate">{channel.name}</span>
-        {connectedUsers.length > 0 && (
-          <span className="ml-auto text-[11px] text-muted-foreground">
-            {connectedUsers.length}
-          </span>
-        )}
-      </button>
-
-      {connectedUsers.length > 0 && (
-        <div className="ml-3 flex flex-col gap-0.5 border-l border-border/60 pl-3 pt-0.5">
-          {connectedUsers.map((u) => (
-            <div
-              key={u.id}
-              className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-secondary/40"
-            >
-              <UserAvatar user={u} size="sm" showStatus={false} />
-              <span className="truncate text-xs text-foreground/90">
-                {u.username}
-              </span>
-              {u.status === "dnd" && (
-                <MicOff className="ml-auto size-3 text-muted-foreground" />
-              )}
-            </div>
-          ))}
-        </div>
+    <button
+      type="button"
+      onClick={onJoin}
+      className={cn(
+        "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+        connected
+          ? "bg-secondary text-foreground"
+          : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
       )}
-    </div>
+    >
+      <Volume2 className="size-4 shrink-0 opacity-70" />
+      <span className="truncate">{channel.name}</span>
+    </button>
   )
 }
 
