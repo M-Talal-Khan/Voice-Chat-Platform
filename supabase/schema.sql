@@ -88,195 +88,231 @@ create index if not exists idx_server_members_user on server_members(user_id);
 create index if not exists idx_server_members_server on server_members(server_id);
 create index if not exists idx_channels_server on channels(server_id, position);
 
--- 3. Row Level Security
+-- 3. Helper functions to avoid RLS recursion
 
-alter table profiles enable row level security;
-alter table servers enable row level security;
-alter table server_members enable row level security;
-alter table channels enable row level security;
-alter table messages enable row level security;
-alter table message_reactions enable row level security;
-alter table attachments enable row level security;
-alter table direct_messages enable row level security;
+create or replace function public.is_server_member(server_id uuid, user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.server_members
+    where server_members.server_id = is_server_member.server_id
+    and server_members.user_id = is_server_member.user_id
+  );
+$$;
 
--- Profiles: readable by all authenticated, editable only by owner
+create or replace function public.is_server_admin(server_id uuid, user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.server_members
+    where server_members.server_id = is_server_admin.server_id
+    and server_members.user_id = is_server_admin.user_id
+    and server_members.role in ('owner', 'admin')
+  );
+$$;
+
+-- 4. Row Level Security
+-- NOTE: All policies use DROP IF EXISTS so the schema is fully re-runnable
+
+-- Enable RLS on all tables
+alter table if exists profiles enable row level security;
+alter table if exists servers enable row level security;
+alter table if exists server_members enable row level security;
+alter table if exists channels enable row level security;
+alter table if exists messages enable row level security;
+alter table if exists message_reactions enable row level security;
+alter table if exists attachments enable row level security;
+alter table if exists direct_messages enable row level security;
+
+-- Profiles
+drop policy if exists "Profiles are viewable by all authenticated users" on profiles;
 create policy "Profiles are viewable by all authenticated users"
   on profiles for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "Users can insert their own profile" on profiles;
 create policy "Users can insert their own profile"
   on profiles for insert
   with check (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on profiles;
 create policy "Users can update own profile"
   on profiles for update
   using (auth.uid() = id);
 
--- Servers: readable by members, creatable by authenticated users
+-- Servers
+drop policy if exists "Servers are viewable by members" on servers;
 create policy "Servers are viewable by members"
   on servers for select
-  using (
-    exists (select 1 from server_members where server_members.server_id = servers.id and server_members.user_id = auth.uid())
-  );
+  using (public.is_server_member(servers.id, auth.uid()));
 
+drop policy if exists "Authenticated users can create servers" on servers;
 create policy "Authenticated users can create servers"
   on servers for insert
   with check (auth.role() = 'authenticated');
 
+drop policy if exists "Owner can update server" on servers;
 create policy "Owner can update server"
   on servers for update
   using (owner_id = auth.uid());
 
+drop policy if exists "Owner can delete server" on servers;
 create policy "Owner can delete server"
   on servers for delete
   using (owner_id = auth.uid());
 
--- Server Members: readable by members of same server
+-- Server Members
+drop policy if exists "Members are viewable by other members" on server_members;
 create policy "Members are viewable by other members"
   on server_members for select
-  using (
-    exists (select 1 from server_members as sm where sm.server_id = server_members.server_id and sm.user_id = auth.uid())
-  );
+  using (public.is_server_member(server_members.server_id, auth.uid()));
 
+drop policy if exists "Members can join servers" on server_members;
 create policy "Members can join servers"
   on server_members for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Members can leave" on server_members;
 create policy "Members can leave"
   on server_members for delete
-  using (auth.uid() = user_id or auth.uid() in (
-    select owner_id from servers where servers.id = server_members.server_id
-  ));
+  using (
+    auth.uid() = user_id
+    or auth.uid() = (select owner_id from public.servers where servers.id = server_members.server_id)
+  );
 
+drop policy if exists "Admin can update member role" on server_members;
 create policy "Admin can update member role"
   on server_members for update
-  using (
-    exists (
-      select 1 from server_members as sm
-      where sm.server_id = server_members.server_id
-      and sm.user_id = auth.uid()
-      and sm.role in ('owner', 'admin')
-    )
-  );
+  using (public.is_server_admin(server_members.server_id, auth.uid()));
 
--- Channels: readable by members of parent server
+-- Channels
+drop policy if exists "Channels are viewable by server members" on channels;
 create policy "Channels are viewable by server members"
   on channels for select
-  using (
-    exists (select 1 from server_members where server_members.server_id = channels.server_id and server_members.user_id = auth.uid())
-  );
+  using (public.is_server_member(channels.server_id, auth.uid()));
 
+drop policy if exists "Members can create channels" on channels;
 create policy "Members can create channels"
   on channels for insert
-  with check (
-    exists (select 1 from server_members where server_members.server_id = channels.server_id and server_members.user_id = auth.uid())
-  );
+  with check (public.is_server_member(channels.server_id, auth.uid()));
 
+drop policy if exists "Admin can update channel" on channels;
 create policy "Admin can update channel"
   on channels for update
-  using (
-    exists (
-      select 1 from server_members
-      where server_members.server_id = channels.server_id
-      and server_members.user_id = auth.uid()
-      and server_members.role in ('owner', 'admin')
-    )
-  );
+  using (public.is_server_admin(channels.server_id, auth.uid()));
 
+drop policy if exists "Admin can delete channel" on channels;
 create policy "Admin can delete channel"
   on channels for delete
-  using (
-    exists (
-      select 1 from server_members
-      where server_members.server_id = channels.server_id
-      and server_members.user_id = auth.uid()
-      and server_members.role in ('owner', 'admin')
-    )
-  );
+  using (public.is_server_admin(channels.server_id, auth.uid()));
 
--- Messages: readable by channel members
+-- Messages
+drop policy if exists "Messages are viewable by channel members" on messages;
 create policy "Messages are viewable by channel members"
   on messages for select
   using (
-    exists (select 1 from channels join server_members on server_members.server_id = channels.server_id where channels.id = messages.channel_id and server_members.user_id = auth.uid())
-  );
-
-create policy "Members can insert messages"
-  on messages for insert
-  with check (
-    auth.uid() = user_id and
-    exists (select 1 from channels join server_members on server_members.server_id = channels.server_id where channels.id = messages.channel_id and server_members.user_id = auth.uid())
-  );
-
-create policy "Owner can update own message"
-  on messages for update
-  using (
-    auth.uid() = user_id or
     exists (
-      select 1 from channels join server_members on server_members.server_id = channels.server_id
-      where channels.id = messages.channel_id and server_members.user_id = auth.uid()
-      and server_members.role in ('owner', 'admin')
+      select 1 from public.channels
+      where channels.id = messages.channel_id
+      and public.is_server_member(channels.server_id, auth.uid())
     )
   );
 
+drop policy if exists "Members can insert messages" on messages;
+create policy "Members can insert messages"
+  on messages for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.channels
+      where channels.id = messages.channel_id
+      and public.is_server_member(channels.server_id, auth.uid())
+    )
+  );
+
+drop policy if exists "Owner can update own message" on messages;
+create policy "Owner can update own message"
+  on messages for update
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.channels
+      where channels.id = messages.channel_id
+      and public.is_server_admin(channels.server_id, auth.uid())
+    )
+  );
+
+drop policy if exists "Owner can delete own message" on messages;
 create policy "Owner can delete own message"
   on messages for delete
   using (
-    auth.uid() = user_id or
-    exists (
-      select 1 from channels join server_members on server_members.server_id = channels.server_id
-      where channels.id = messages.channel_id and server_members.user_id = auth.uid()
-      and server_members.role in ('owner', 'admin')
+    auth.uid() = user_id
+    or exists (
+      select 1 from public.channels
+      where channels.id = messages.channel_id
+      and public.is_server_admin(channels.server_id, auth.uid())
     )
   );
 
 -- Message Reactions
+drop policy if exists "Reactions are viewable by all authenticated" on message_reactions;
 create policy "Reactions are viewable by all authenticated"
   on message_reactions for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "Users can add reactions" on message_reactions;
 create policy "Users can add reactions"
   on message_reactions for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can remove own reactions" on message_reactions;
 create policy "Users can remove own reactions"
   on message_reactions for delete
   using (auth.uid() = user_id);
 
--- Attachments: readable by channel members
+-- Attachments
+drop policy if exists "Attachments are viewable by channel members" on attachments;
 create policy "Attachments are viewable by channel members"
   on attachments for select
   using (
     exists (
-      select 1 from messages
-      join channels on channels.id = messages.channel_id
-      join server_members on server_members.server_id = channels.server_id
+      select 1 from public.messages
+      join public.channels on channels.id = messages.channel_id
       where messages.id = attachments.message_id
-      and server_members.user_id = auth.uid()
+      and public.is_server_member(channels.server_id, auth.uid())
     )
   );
 
+drop policy if exists "Members can create attachments" on attachments;
 create policy "Members can create attachments"
   on attachments for insert
   with check (
     exists (
-      select 1 from messages
-      join channels on channels.id = messages.channel_id
-      join server_members on server_members.server_id = channels.server_id
+      select 1 from public.messages
+      join public.channels on channels.id = messages.channel_id
       where messages.id = attachments.message_id
-      and server_members.user_id = auth.uid()
+      and public.is_server_member(channels.server_id, auth.uid())
     )
   );
 
 -- Direct Messages
+drop policy if exists "Users can view their own DMs" on direct_messages;
 create policy "Users can view their own DMs"
   on direct_messages for select
   using (auth.uid() = sender_id or auth.uid() = receiver_id);
 
+drop policy if exists "Users can send DMs" on direct_messages;
 create policy "Users can send DMs"
   on direct_messages for insert
   with check (auth.uid() = sender_id);
 
+drop policy if exists "Users can mark DMs as read" on direct_messages;
 create policy "Users can mark DMs as read"
   on direct_messages for update
   using (auth.uid() = receiver_id);
