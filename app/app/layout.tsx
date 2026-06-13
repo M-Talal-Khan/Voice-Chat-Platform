@@ -6,6 +6,7 @@ import { ServerRail } from "@/components/app/server-rail"
 import { ChannelSidebar } from "@/components/app/channel-sidebar"
 import { DmSidebar } from "@/components/app/dm-sidebar"
 import { VoiceRoom } from "@/components/app/voice-provider"
+import { UserSettings } from "@/components/app/user-settings"
 import {
   CreateServerModal,
   JoinServerModal,
@@ -73,6 +74,7 @@ export default function AppLayout({
   const [showServerInfo, setShowServerInfo] = useState(false)
   const [showDeleteServer, setShowDeleteServer] = useState(false)
   const [showServerSettings, setShowServerSettings] = useState(false)
+  const [showUserSettings, setShowUserSettings] = useState(false)
   const [serverSettingsName, setServerSettingsName] = useState("")
   const [serverSettingsError, setServerSettingsError] = useState<string | null>(null)
 
@@ -311,7 +313,7 @@ export default function AppLayout({
             setServerSettingsName(selectedServer.name)
             setShowServerSettings(true)
           }}
-          onOpenUserSettings={() => {}}
+          onOpenUserSettings={() => setShowUserSettings(true)}
           onOpenCreateChannel={() => setShowCreateChannel(true)}
           onOpenInvite={() => setShowServerInfo(true)}
           onLeaveServer={handleLeaveServer}
@@ -322,6 +324,9 @@ export default function AppLayout({
 
       {/* Main Content */}
       <main className="flex flex-1 flex-col bg-chat">{children}</main>
+
+      {/* User Settings */}
+      <UserSettings open={showUserSettings} onOpenChange={setShowUserSettings} />
 
       {/* Voice Room (hidden, manages connection) */}
       {connectedVoiceChannelId && currentUser && selectedServer && (
