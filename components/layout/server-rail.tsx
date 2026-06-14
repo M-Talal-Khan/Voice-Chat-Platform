@@ -39,7 +39,7 @@ export function ServerRail({
             <TooltipTrigger
               render={
                 <Link
-                  href="/app"
+                  href="/"
                   className="group flex size-12 items-center justify-center rounded-server bg-transparent transition-transform hover:scale-105"
                 />
               }

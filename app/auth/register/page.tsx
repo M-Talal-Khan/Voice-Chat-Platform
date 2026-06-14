@@ -46,32 +46,37 @@ export default function RegisterPage() {
   })
 
   async function onSubmit(data: RegisterForm) {
-    setError(null)
-    setLoading(true)
+    try {
+      setError(null)
+      setLoading(true)
 
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: {
-          username: data.username,
+      const supabase = createClient()
+      const { error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            username: data.username,
+          },
         },
-      },
-    })
+      })
 
-    if (authError) {
-      let msg = authError.message
-      if (msg.includes("Database error saving new user") || msg.includes("duplicate key value")) {
-        msg = "Username is already taken."
+      if (authError) {
+        let msg = authError.message
+        if (msg.includes("Database error saving new user") || msg.includes("duplicate key value")) {
+          msg = "Username is already taken."
+        }
+        setError(msg)
+        setLoading(false)
+        return
       }
-      setError(msg)
-      setLoading(false)
-      return
-    }
 
-    router.push("/app")
-    router.refresh()
+      router.push("/app")
+      router.refresh()
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred.")
+      setLoading(false)
+    }
   }
 
   return (

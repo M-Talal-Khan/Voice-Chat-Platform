@@ -42,24 +42,29 @@ function LoginForm() {
   })
 
   async function onSubmit(data: LoginForm) {
-    setError(null)
-    setLoading(true)
+    try {
+      setError(null)
+      setLoading(true)
 
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    })
+      const supabase = createClient()
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      })
 
-    if (authError) {
-      setError(authError.message)
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+        return
+      }
+
+      const redirect = searchParams.get("redirect") || "/app"
+      router.push(redirect)
+      router.refresh()
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred.")
       setLoading(false)
-      return
     }
-
-    const redirect = searchParams.get("redirect") || "/app"
-    router.push(redirect)
-    router.refresh()
   }
 
   return (
