@@ -1,10 +1,15 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Inter, Geist_Mono } from 'next/font/google'
+import { Space_Grotesk, Geist_Mono } from 'next/font/google'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './globals.css'
 
-const inter = Inter({ variable: '--font-inter', subsets: ['latin'] })
+const spaceGrotesk = Space_Grotesk({
+  variable: '--font-space-grotesk',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+})
+
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
@@ -12,17 +17,19 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Thiscord',
-  description: 'Thiscord - totally not Discord. Voice and text chat for people with taste.',
+  description: 'Thiscord - totally not Discord',
   keywords: 'voice chat, text chat, thiscord, totally original, not discord',
+  icons: { icon: '/logo-icon.svg' },
   openGraph: {
     title: 'Thiscord',
-    description: 'totally not Discord',
+    description: 'Thiscord - totally not Discord',
+    images: [{ url: '/logo-with-text.svg' }],
   },
 }
 
 export const viewport: Viewport = {
   colorScheme: 'dark',
-  themeColor: '#1a1a2e',
+  themeColor: '#141414',
 }
 
 export default function RootLayout({
@@ -33,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${geistMono.variable} bg-background`}
+      className={`${spaceGrotesk.variable} ${geistMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">
         <TooltipProvider delay={200}>{children}</TooltipProvider>

@@ -17,8 +17,8 @@ export function ToastContainer() {
           className={cn(
             "flex w-72 items-start gap-2 rounded-lg border px-3 py-2.5 text-sm shadow-lg animate-in fade-in slide-in-from-right-2",
             t.variant === "destructive"
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
-              : "border-border bg-card text-foreground",
+              ? "border-danger/30 bg-danger/10 text-danger"
+              : "border-border-subtle bg-surface text-text-primary",
           )}
         >
           <div className="flex-1">

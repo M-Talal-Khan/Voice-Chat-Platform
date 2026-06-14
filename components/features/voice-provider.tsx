@@ -10,6 +10,7 @@ import {
 } from "@livekit/components-react"
 import { Track, createLocalAudioTrack } from "livekit-client"
 import { useAppStore } from "@/lib/store"
+import { toast } from "@/hooks/use-toast"
 import "@livekit/components-styles"
 
 export function getLiveKitTokenUrl(roomName: string, username: string) {
@@ -57,6 +58,14 @@ export function VoiceProvider({
   const [token, setToken] = useState<string | undefined>(undefined)
   const { deafened, micOn } = useAppStore()
 
+  const handleDisconnected = useCallback(() => {
+    toast("Connection lost", {
+      description: "disconnected, just like our relationship with copyright law",
+      variant: "destructive",
+    })
+    onDisconnected()
+  }, [onDisconnected])
+
   useEffect(() => {
     if (!roomName) {
       setToken(undefined)
@@ -70,8 +79,8 @@ export function VoiceProvider({
       serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
       token={token}
       connect={!!roomName && !!token}
-      onDisconnected={onDisconnected}
-      audio={micOn && !deafened} // Initial connection state
+      onDisconnected={handleDisconnected}
+      audio={!!roomName && !!token && micOn && !deafened} // Only request mic if connected
       className="flex flex-1 flex-col"
     >
       {!deafened && <RoomAudioRenderer />}

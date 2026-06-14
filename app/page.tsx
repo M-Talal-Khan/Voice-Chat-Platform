@@ -1,301 +1,252 @@
-import Link from "next/link"
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
+import Image from "next/image"
+
+import { StarField } from "@/components/features/star-field"
 import {
-  Mic,
-  MessageSquare,
-  Users,
-  Shield,
-  Headphones,
-  Zap,
-  Radio,
-  ArrowRight,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
+  motion,
+  useMotionValue,
+  useSpring,
+  useTransform,
+} from "framer-motion"
 
-const features = [
-  {
-    icon: Mic,
-    title: "Crystal-clear voice",
-    description:
-      "Drop into a voice channel with one click. Low-latency audio built for long sessions and big rooms.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Organized text channels",
-    description:
-      "Keep conversations tidy with dedicated channels, replies, reactions, and pinned messages.",
-  },
-  {
-    icon: Users,
-    title: "Communities that scale",
-    description:
-      "Spin up servers for your team, your guild, or your friends. Roles and member lists included.",
-  },
-  {
-    icon: Shield,
-    title: "Yours to control",
-    description:
-      "Granular settings, invite links, and moderation tools so your space stays exactly how you want it.",
-  },
-  {
-    icon: Headphones,
-    title: "Mute, deafen, done",
-    description:
-      "Familiar voice controls right where you expect them. Manage your mic and audio in a single tap.",
-  },
-  {
-    icon: Zap,
-    title: "Fast and lightweight",
-    description:
-      "A snappy interface that gets out of your way so you can focus on the conversation.",
-  },
-]
+/* ─── Starburst SVG (pre-computed path to avoid hydration mismatch) ── */
+const STARBURST_PATH =
+  "M200,0 L223.4,82.3 L276.5,15.2 L266.7,100.2 L341.4,58.6 L299.8,133.3 L384.8,123.5 L317.7,176.6 L400,200 L317.7,223.4 L384.8,276.5 L299.8,266.7 L341.4,341.4 L266.7,299.8 L276.5,384.8 L223.4,317.7 L200,400 L176.6,317.7 L123.5,384.8 L133.3,299.8 L58.6,341.4 L100.2,266.7 L15.2,276.5 L82.3,223.4 L0,200 L82.3,176.6 L15.2,123.5 L100.2,133.3 L58.6,58.6 L133.3,100.2 L123.5,15.2 L176.6,82.3 Z"
 
-export default function LandingPage() {
+function StarburstShape({ className = "" }: { className?: string }) {
   return (
-    <div className="flex min-h-svh flex-col bg-background text-foreground">
-      {/* Nav */}
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-              <Radio className="size-5" />
-            </span>
-            <span className="text-lg font-semibold tracking-tight">Thiscord</span>
-          </Link>
-          <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="transition-colors hover:text-foreground">
-              Features
-            </a>
-            <a href="#communities" className="transition-colors hover:text-foreground">
-              Communities
-            </a>
-            <a href="#voice" className="transition-colors hover:text-foreground">
-              Voice
-            </a>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/auth/login">Log in</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link href="/auth/register">Sign up</Link>
-            </Button>
+    <svg
+      viewBox="0 0 400 400"
+      className={className}
+      fill="#AAFF00"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d={STARBURST_PATH} />
+    </svg>
+  )
+}
+
+
+/* ─── Grain Overlay ─────────────────────────────────────── */
+function GrainOverlay() {
+  return (
+    <div
+      className="grain-overlay"
+      aria-hidden="true"
+    />
+  )
+}
+
+/* ─── Main Landing Page ─────────────────────────────────── */
+export default function LandingPage() {
+  const router = useRouter()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [hasMounted, setHasMounted] = useState(false)
+
+  // Mouse position for parallax + repulsion
+  const mouseX = useMotionValue(0)
+  const mouseY = useMotionValue(0)
+
+  // Starburst repulsion springs
+
+  const repelX = useSpring(0, { stiffness: 100, damping: 20 })
+  const repelY = useSpring(0, { stiffness: 100, damping: 20 })
+
+  // Parallax transforms for text layers
+  const parallaxX1 = useTransform(mouseX, [-1, 1], [15, -15])
+  const parallaxY1 = useTransform(mouseY, [-1, 1], [10, -10])
+  const parallaxX2 = useTransform(mouseX, [-1, 1], [-10, 10])
+  const parallaxY2 = useTransform(mouseY, [-1, 1], [-8, 8])
+
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const normX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+    const normY = ((e.clientY - rect.top) / rect.height) * 2 - 1
+    mouseX.set(normX)
+    mouseY.set(normY)
+
+    // Starburst repulsion
+    // Starburst center is approximately at 70% from left, 50% from top
+    const starCenterX = rect.left + rect.width * 0.72
+    const starCenterY = rect.top + rect.height * 0.45
+
+    const dx = e.clientX - starCenterX
+    const dy = e.clientY - starCenterY
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    const maxDist = 400
+    const maxRepel = 150
+
+    if (dist < maxDist) {
+      const strength = 1 - dist / maxDist
+      const angle = Math.atan2(dy, dx)
+      repelX.set(-Math.cos(angle) * maxRepel * strength)
+      repelY.set(-Math.sin(angle) * maxRepel * strength)
+    } else {
+      repelX.set(0)
+      repelY.set(0)
+    }
+  }
+
+  function handleMouseLeave() {
+    repelX.set(0)
+    repelY.set(0)
+    mouseX.set(0)
+    mouseY.set(0)
+  }
+
+  // Animation variants
+  const containerVariants = {
+    hidden: {},
+    visible: {
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.1,
+      },
+    },
+  }
+
+  const textSlideUp = {
+    hidden: { y: 100, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] } as any,
+    },
+  }
+
+  const starburstVariant = {
+    hidden: { scale: 0, opacity: 0 },
+    visible: {
+      scale: 1,
+      opacity: 1,
+      transition: { duration: 0.7, delay: 0.6, ease: [0.34, 1.56, 0.64, 1] } as any,
+    },
+  }
+
+  const fadeIn = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { duration: 1, delay: 1 },
+    },
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="landing-root"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <GrainOverlay />
+
+      {/* Radial gradient center glow */}
+      <div className="landing-center-glow" aria-hidden="true" />
+
+      {/* Background Star Field */}
+      <StarField />
+
+      {/* Dark vignette edges */}
+      <div className="landing-vignette" aria-hidden="true" />
+
+      <motion.div
+        className="landing-content"
+        variants={containerVariants}
+        initial="hidden"
+        animate={hasMounted ? "visible" : "hidden"}
+      >
+        {/* ── Top Left: Thiscord Logo ── */}
+        <motion.div className="landing-logo" variants={textSlideUp}>
+          <Image
+            src="/logo-with-text.svg"
+            alt="Thiscord"
+            width={200}
+            height={50}
+            className="w-[200px]"
+            style={{ filter: "drop-shadow(0 0 8px rgba(170, 255, 0, 0.6))" }}
+          />
+        </motion.div>
+
+        {/* ── Ghost Background Text ── */}
+        <motion.div
+          className="landing-ghost-text"
+          variants={fadeIn}
+          aria-hidden="true"
+        >
+          <motion.span style={{ x: parallaxX2, y: parallaxY2 }}>
+            dddddiscord
+          </motion.span>
+        </motion.div>
+
+        {/* ── Hero Typography ── */}
+        <div className="landing-hero-text">
+          <div className="landing-hero-text-overflow-clip">
+            <motion.h1
+              className="landing-hero-line1"
+              variants={textSlideUp}
+              style={{ x: parallaxX1, y: parallaxY1 }}
+            >
+              not
+            </motion.h1>
+          </div>
+          <div className="landing-hero-text-overflow-clip">
+            <motion.h1
+              className="landing-hero-line2"
+              variants={textSlideUp}
+              style={{ x: parallaxX2, y: parallaxY2 }}
+            >
+              Discord.
+            </motion.h1>
           </div>
         </div>
-      </header>
 
-      {/* Hero */}
-      <main className="flex-1">
-        <section className="relative overflow-hidden">
-          {/* Background glows */}
-          <div className="hero-glow -top-40 left-1/2 -translate-x-1/2" />
-          <div className="hero-glow top-40 -left-40 opacity-40" style={{ animationDelay: "2s" }} />
-          <div className="hero-glow top-20 -right-40 opacity-30" style={{ animationDelay: "4s", background: "radial-gradient(circle, oklch(0.55 0.13 250 / 12%) 0%, transparent 70%)" }} />
+        {/* ── Starburst with CTA ── */}
+        <motion.div
+          className="landing-starburst-container"
+          variants={starburstVariant}
+          style={{ x: repelX, y: repelY }}
+        >
+          <motion.div
+            className="landing-starburst-inner"
+            animate={{ rotate: 360 }}
+            transition={{
+              duration: 30,
+              repeat: Infinity,
+              ease: "linear",
+            }}
+          >
+            <StarburstShape className="landing-starburst-svg" />
+          </motion.div>
+          <button
+            className="landing-starburst-cta"
+            onClick={() => router.push("/auth/register")}
+            id="cta-start-talking"
+          >
+            start<br />talking
+          </button>
+        </motion.div>
 
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 text-center sm:px-6 sm:py-28 relative z-10">
-            <div className="animate-fade-in-up mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-card/80 backdrop-blur-sm px-4 py-1.5 text-xs text-muted-foreground shadow-lg shadow-black/5">
-              <span className="relative inline-block size-2 rounded-full bg-[var(--color-online)]">
-                <span className="absolute inset-0 animate-ping rounded-full bg-[var(--color-online)] opacity-50" />
-              </span>
-              Voice &amp; text chat for every community
-            </div>
-            <h1 className="animate-fade-in-up-delay mx-auto mt-6 max-w-3xl text-balance text-4xl font-bold leading-tight tracking-tight sm:text-6xl">
-              Where your community{" "}
-              <span className="text-gradient">comes to talk</span>
-            </h1>
-            <p className="animate-fade-in-up-delay-2 mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Thiscord brings your people together with high-quality voice rooms,
-              organized text channels, and the tools to run a thriving community.
-            </p>
-            <div className="animate-fade-in-up-delay-2 mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow">
-                <Link href="/app">
-                  <Users className="size-4" data-icon="inline-start" />
-                  Join a Server
-                  <ArrowRight className="size-4 ml-1 transition-transform group-hover/button:translate-x-0.5" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="w-full sm:w-auto"
-              >
-                <Link href="/app">
-                  <Radio className="size-4" data-icon="inline-start" />
-                  Create Server
-                </Link>
-              </Button>
-            </div>
+        {/* ── Bottom Left: Tagline ── */}
+        <motion.p className="landing-tagline" variants={fadeIn}>
+          totally original. promise.
+        </motion.p>
 
-            {/* App preview mock */}
-            <div className="mx-auto mt-16 max-w-4xl animate-float" style={{ animationDuration: "8s" }}>
-              <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl shadow-black/30 ring-1 ring-white/5">
-                <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 bg-background/30">
-                  <span className="size-3 rounded-full bg-[var(--color-dnd)]" />
-                  <span className="size-3 rounded-full bg-[var(--color-idle)]" />
-                  <span className="size-3 rounded-full bg-[var(--color-online)]" />
-                  <span className="ml-auto text-[11px] text-muted-foreground/60">Thiscord — Resonate HQ</span>
-                </div>
-                <div className="flex h-72 text-left">
-                  <div className="hidden w-14 flex-col items-center gap-3 bg-rail py-4 sm:flex">
-                    <span className="flex size-10 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20">
-                      RH
-                    </span>
-                    <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-xs text-secondary-foreground transition-all hover:rounded-2xl">
-                      DG
-                    </span>
-                    <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-xs text-secondary-foreground transition-all hover:rounded-2xl">
-                      GN
-                    </span>
-                  </div>
-                  <div className="hidden w-44 flex-col gap-1 bg-channels p-3 lg:flex">
-                    <p className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Text Channels
-                    </p>
-                    <span className="rounded-md bg-primary/15 px-2 py-1 text-sm text-foreground">
-                      # general
-                    </span>
-                    <span className="px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
-                      # dev-talk
-                    </span>
-                    <span className="px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
-                      # design
-                    </span>
-                    <p className="mt-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Voice Channels
-                    </p>
-                    <span className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground">
-                      <Mic className="size-3.5" /> Lobby
-                      <span className="ml-auto flex -space-x-1">
-                        <span className="size-4 rounded-full bg-chart-1 ring-1 ring-channels" />
-                        <span className="size-4 rounded-full bg-chart-3 ring-1 ring-channels" />
-                        <span className="size-4 rounded-full bg-chart-4 ring-1 ring-channels" />
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col bg-chat p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-full bg-chart-1 text-xs font-semibold text-primary-foreground">
-                        NV
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium">
-                          nova{" "}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            9:02 AM
-                          </span>
-                        </p>
-                        <p className="text-sm text-foreground/90">
-                          morning everyone, pushed the new voice channel UI last night
-                        </p>
-                        <div className="mt-1.5 flex gap-1">
-                          <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-xs">🔥 4</span>
-                          <span className="inline-flex items-center gap-0.5 rounded-full border border-border px-1.5 py-0.5 text-xs text-muted-foreground">🚀 2</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-start gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-full bg-chart-3 text-xs font-semibold text-primary-foreground">
-                        LM
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium">
-                          lumen{" "}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            9:04 AM
-                          </span>
-                        </p>
-                        <p className="text-sm text-foreground/90">
-                          looks slick! the avatars stacking inside the channel row is a nice touch
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-auto flex items-center gap-2 rounded-lg bg-background/40 px-3 py-2 text-sm text-muted-foreground ring-1 ring-white/5">
-                      <span className="opacity-50">💬</span>
-                      Message #general
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features */}
-        <section id="features" className="relative border-t border-border/60 bg-card/20">
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
-            <div className="mx-auto max-w-2xl text-center">
-              <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-                Everything your community needs
-              </h2>
-              <p className="mt-4 text-pretty text-muted-foreground">
-                From late-night gaming sessions to focused work sprints, Thiscord
-                has the channels and controls to keep everyone in sync.
-              </p>
-            </div>
-            <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((feature, i) => (
-                <div
-                  key={feature.title}
-                  className="card-glow rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6 transition-all duration-300 hover:border-primary/40 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/5"
-                  style={{ animationDelay: `${i * 0.1}s` }}
-                >
-                  <span className="flex size-11 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/10">
-                    <feature.icon className="size-5" />
-                  </span>
-                  <h3 className="mt-4 font-semibold">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {feature.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section id="voice" className="relative overflow-hidden border-t border-border/60">
-          {/* Background accent */}
-          <div className="hero-glow left-1/2 top-0 -translate-x-1/2 opacity-30" />
-
-          <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-20 text-center sm:px-6">
-            <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/10">
-              <Headphones className="size-8" />
-            </div>
-            <h2 className="mt-6 text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-              Ready to start talking?
-            </h2>
-            <p className="mx-auto mt-4 max-w-lg text-pretty text-muted-foreground">
-              Create your first server in seconds. No downloads, no friction —
-              just your community and a place to gather.
-            </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="shadow-lg shadow-primary/25">
-                <Link href="/auth/register">Get started free</Link>
-              </Button>
-              <Button asChild size="lg" variant="ghost">
-                <Link href="/app">Explore the app</Link>
-              </Button>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer id="communities" className="border-t border-border/60 bg-rail/50">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6">
-          <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Radio className="size-4" />
-            </span>
-            <span className="text-sm font-medium">Thiscord</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Voice &amp; text chat for your community. Built with ❤️
-          </p>
-        </div>
-      </footer>
+        {/* ── Easter Eggs ── */}
+        <motion.p className="landing-easter-egg-1" variants={fadeIn}>
+          discord at home
+        </motion.p>
+        <motion.p className="landing-easter-egg-2" variants={fadeIn}>
+          made by people who forgot to buy discord nitro
+        </motion.p>
+      </motion.div>
     </div>
   )
 }

@@ -3,10 +3,12 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Radio, Eye, EyeOff, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { StarField } from "@/components/features/star-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -59,7 +61,11 @@ export default function RegisterPage() {
     })
 
     if (authError) {
-      setError(authError.message)
+      let msg = authError.message
+      if (msg.includes("Database error saving new user") || msg.includes("duplicate key value")) {
+        msg = "Username is already taken."
+      }
+      setError(msg)
       setLoading(false)
       return
     }
@@ -69,7 +75,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="relative flex min-h-svh items-center justify-center bg-background px-4 py-10 overflow-hidden">
+    <div className="relative flex min-h-screen items-center justify-center bg-bg-primary p-4">
+      <StarField isAuthPage />
       {/* Background effects */}
       <div className="hero-glow -top-60 left-1/2 -translate-x-1/2 opacity-40" />
       <div className="hero-glow bottom-0 -left-40 opacity-20" style={{ animationDelay: "2s" }} />
@@ -77,19 +84,23 @@ export default function RegisterPage() {
       <div className="relative z-10 w-full max-w-md animate-fade-in-up">
         <Link
           href="/"
-          className="mb-8 flex items-center justify-center gap-2 group"
+          className="mb-8 flex items-center justify-center group"
         >
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
-            <Radio className="size-5" />
-          </span>
-          <span className="text-xl font-semibold tracking-tight">Thiscord</span>
+          <Image
+            src="/logo-with-text.svg"
+            alt="Thiscord"
+            width={160}
+            height={40}
+            className="w-[160px]"
+            style={{ filter: "drop-shadow(0 0 8px rgba(170, 255, 0, 0.6))" }}
+          />
         </Link>
 
         <div className="glass-strong rounded-2xl p-6 shadow-2xl shadow-black/20 sm:p-8">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Join Thiscord</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              because Discord was taken
+            <h1 className="text-2xl font-bold tracking-heading">Join Thiscord</h1>
+            <p className="mt-1.5 text-sm text-text-muted text-muted-opacity">
+              totally not Discord
             </p>
           </div>
 
@@ -158,7 +169,7 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              <Button type="submit" size="lg" className="w-full shadow-lg shadow-primary/20" disabled={loading}>
+              <Button type="submit" size="lg" className="w-full shadow-accent-glow" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
@@ -176,7 +187,7 @@ export default function RegisterPage() {
           Already have an account?{" "}
           <Link
             href="/auth/login"
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            className="font-medium text-accent-primary underline-offset-4 hover:text-accent-hover hover:underline"
           >
             Log in
           </Link>

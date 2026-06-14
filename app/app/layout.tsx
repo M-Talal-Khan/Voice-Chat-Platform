@@ -16,6 +16,7 @@ import {
   ServerInfoModal,
   DeleteServerModal,
 } from "@/components/features/modals"
+import { ServerSettingsModal } from "@/components/features/server-settings"
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,8 @@ export default function AppLayout({
     setDmView,
     setSelectedDmUser,
     selectedDmUser,
+    pendingRequests,
+    setPendingRequests,
   } = useAppStore()
 
   const [loading, setLoading] = useState(true)
@@ -76,8 +79,6 @@ export default function AppLayout({
   const [showDeleteServer, setShowDeleteServer] = useState(false)
   const [showServerSettings, setShowServerSettings] = useState(false)
   const [showUserSettings, setShowUserSettings] = useState(false)
-  const [serverSettingsName, setServerSettingsName] = useState("")
-  const [serverSettingsError, setServerSettingsError] = useState<string | null>(null)
 
   // Fetch session and servers on mount
   useEffect(() => {
@@ -113,8 +114,20 @@ export default function AppLayout({
           }
           setLoading(false)
         })
+
+      // Fetch pending friend requests for badge
+      supabase
+        .from("friends")
+        .select("*")
+        .eq("receiver_id", user.id)
+        .eq("status", "pending")
+        .then(({ data }) => {
+          if (data) {
+            setPendingRequests(data as any)
+          }
+        })
     })
-  }, [router, setCurrentUser, setServers])
+  }, [router, setCurrentUser, setServers, setPendingRequests])
 
   // When selected server changes, fetch channels and members
   useEffect(() => {
@@ -157,6 +170,7 @@ export default function AppLayout({
       setDmView(false)
       setSelectedDmUser(null)
       setSelectedServer(server)
+      router.push("/app")
     }
   }
 
@@ -165,6 +179,7 @@ export default function AppLayout({
     if (channel) {
       setSelectedChannel(channel)
       setMessages([])
+      router.push("/app")
     }
   }
 
@@ -184,6 +199,7 @@ export default function AppLayout({
     setMembers([])
     setMessages([])
     setSelectedDmUser(null)
+    router.push("/app/friends")
   }
 
   async function handleLeaveServer() {
@@ -215,41 +231,26 @@ export default function AppLayout({
     setShowDeleteServer(false)
   }
 
-  async function handleUpdateServerName() {
-    if (!selectedServer || !serverSettingsName.trim()) return
-    setServerSettingsError(null)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("servers")
-      .update({ name: serverSettingsName.trim() })
-      .eq("id", selectedServer.id)
-
-    if (error) {
-      setServerSettingsError(error.message)
-      return
-    }
-
-    setServers(
-      servers.map((s) =>
-        s.id === selectedServer.id ? { ...s, name: serverSettingsName.trim() } : s,
-      ),
-    )
-    setSelectedServer({ ...selectedServer, name: serverSettingsName.trim() })
-    setShowServerSettings(false)
-  }
-
   const isOwner = selectedServer?.owner_id === currentUser?.id
 
   // Presence and notifications
   usePresence()
   useUnreadNotifications()
 
+  useEffect(() => {
+    const handleOpenCreateServer = () => setShowCreateServer(true)
+    window.addEventListener("openCreateServer", handleOpenCreateServer)
+    return () => window.removeEventListener("openCreateServer", handleOpenCreateServer)
+  }, [])
+
   if (loading) {
     return (
-      <div className="flex h-svh items-center justify-center bg-background">
+      <div className="flex h-svh items-center justify-center bg-bg-primary">
         <div className="flex flex-col items-center gap-3">
-          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <div className="size-8 animate-spin rounded-full border-2 border-accent-primary border-t-transparent" />
+          <p className="text-sm text-text-muted text-muted-opacity">
+            definitely not copying anyone...
+          </p>
         </div>
       </div>
     )
@@ -257,12 +258,12 @@ export default function AppLayout({
 
   if (servers.length === 0) {
     return (
-      <div className="flex h-svh flex-col bg-background">
+      <div className="flex h-svh flex-col bg-bg-primary">
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <h2 className="text-xl font-semibold">No servers yet</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Create a server or join one with an invite code to get started.
+            <h2 className="text-xl font-bold tracking-heading">No servers yet</h2>
+            <p className="mt-2 text-sm text-text-muted text-muted-opacity">
+              so empty, just like our originality
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Button onClick={() => setShowCreateServer(true)}>
@@ -282,16 +283,17 @@ export default function AppLayout({
   }
 
   return (
-    <div className="flex h-svh bg-background">
+    <div className="flex h-svh bg-bg-primary">
       {/* Server Rail */}
       <ServerRail
         servers={servers}
         activeServerId={selectedServer?.id ?? null}
         onSelectServer={handleSelectServer}
         onAddServer={() => setShowCreateServer(true)}
-        onExploreServers={() => setShowJoinServer(true)}
+        onExploreServers={() => router.push("/app/explore")}
         onOpenDm={handleOpenDm}
         dmActive={dmView}
+        dmBadge={pendingRequests.filter(r => r.receiver_id === currentUser?.id).length}
       />
 
       {/* DM Sidebar */}
@@ -311,16 +313,21 @@ export default function AppLayout({
           onToggleMic={() => setMicOn(!micOn)}
           deafened={deafened}
           onToggleDeafen={() => setDeafened(!deafened)}
-          onOpenServerSettings={() => {
-            setServerSettingsName(selectedServer.name)
-            setShowServerSettings(true)
-          }}
+          onOpenServerSettings={() => setShowServerSettings(true)}
           onOpenUserSettings={() => setShowUserSettings(true)}
           onOpenCreateChannel={() => setShowCreateChannel(true)}
           onOpenInvite={() => setShowServerInfo(true)}
           onLeaveServer={handleLeaveServer}
           onDeleteServer={() => setShowDeleteServer(true)}
           isOwner={isOwner}
+          onMessageMember={(userId) => {
+            const userProfile = members.find((m) => m.user_id === userId)?.profile
+            if (userProfile) {
+              handleOpenDm()
+              setSelectedDmUser(userProfile)
+              router.push(`/app/dm/${userProfile.id}`)
+            }
+          }}
         />
       )}
 
@@ -334,7 +341,7 @@ export default function AppLayout({
         username={currentUser?.username ?? "Anonymous"}
         onDisconnected={() => setConnectedVoiceChannelId(null)}
       >
-        <main className="flex flex-1 flex-col bg-chat relative z-0">
+        <main className="relative z-0 flex flex-1 flex-col bg-bg-primary">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </VoiceProvider>
@@ -367,37 +374,11 @@ export default function AppLayout({
             serverName={selectedServer.name}
             onConfirm={handleDeleteServer}
           />
-          <Dialog open={showServerSettings} onOpenChange={setShowServerSettings}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Server Settings</DialogTitle>
-                <DialogDescription>
-                  Edit your server name and configuration.
-                </DialogDescription>
-              </DialogHeader>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="server-settings-name">Server Name</FieldLabel>
-                  <Input
-                    id="server-settings-name"
-                    value={serverSettingsName}
-                    onChange={(e) => setServerSettingsName(e.target.value)}
-                    placeholder={selectedServer.name}
-                    onKeyDown={(e) => e.key === "Enter" && handleUpdateServerName()}
-                  />
-                </Field>
-                {serverSettingsError && (
-                  <p className="text-sm text-destructive">{serverSettingsError}</p>
-                )}
-              </FieldGroup>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowServerSettings(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleUpdateServerName}>Save</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <ServerSettingsModal
+            open={showServerSettings}
+            onOpenChange={setShowServerSettings}
+            server={selectedServer}
+          />
         </>
       )}
     </div>

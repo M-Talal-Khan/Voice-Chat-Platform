@@ -26,7 +26,7 @@ export function DmSidebar() {
     async function fetchConversations() {
       const { data } = await supabase
         .from("direct_messages")
-        .select("*, sender:sender_id(*), receiver:receiver_id(*)")
+        .select("*, sender:sender_id(*), receiver:receiver_id(*), attachments:attachments(*)")
         .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
         .order("created_at", { ascending: false })
 
@@ -35,7 +35,6 @@ export function DmSidebar() {
         return
       }
 
-      // Group by other user
       const seen = new Map<string, { user: Profile; lastMessage: DirectMessage; unread: number }>()
 
       for (const dm of data as any[]) {
@@ -69,12 +68,12 @@ export function DmSidebar() {
   }
 
   return (
-    <div className="flex h-full w-60 shrink-0 flex-col bg-channels">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-4">
-        <span className="font-semibold">Direct Messages</span>
+    <div className="flex h-full w-60 shrink-0 flex-col border-r border-border-subtle bg-bg-secondary">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border-subtle px-4">
+        <span className="font-bold tracking-heading">Direct Messages</span>
         <button
           onClick={() => setDmView(false)}
-          className="rounded p-1 text-muted-foreground hover:text-foreground"
+          className="rounded p-1 text-text-muted hover:text-accent-primary"
         >
           <X className="size-4" />
         </button>
@@ -82,23 +81,23 @@ export function DmSidebar() {
 
       <div className="p-2.5">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-muted" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find a friend"
-            className="h-8 bg-background/50 pl-8 text-sm"
+            className="h-8 bg-bg-primary pl-8 text-sm"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2 no-scrollbar">
         {loading ? (
-          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-            Loading conversations...
+          <div className="px-2 py-4 text-center text-xs text-text-muted text-muted-opacity">
+            definitely not copying anyone...
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+          <div className="px-2 py-4 text-center text-xs text-text-muted text-muted-opacity">
             No conversations yet
           </div>
         ) : (
@@ -110,22 +109,25 @@ export function DmSidebar() {
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                   selectedDmUser?.id === conv.user.id
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
+                    ? "border-l-2 border-accent-primary bg-surface pl-[calc(0.5rem-2px)] text-accent-primary"
+                    : "text-text-muted hover:bg-surface hover:text-text-primary",
                 )}
               >
                 <span
-                  className="inline-block size-2 shrink-0 rounded-full"
+                  className="inline-block size-2 shrink-0 rounded-full shadow-[0_0_6px_currentColor]"
                   style={{
                     backgroundColor: conv.user.status === "online"
-                      ? "var(--color-online)"
-                      : "var(--color-offline)",
+                      ? "var(--online)"
+                      : "var(--offline)",
+                    color: conv.user.status === "online"
+                      ? "var(--online)"
+                      : "var(--offline)",
                   }}
                 />
                 <span className="truncate">{conv.user.username}</span>
                 {conv.unread > 0 && (
-                  <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-                    {conv.unread}
+                  <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-accent-primary text-[10px] font-bold text-bg-primary">
+                    {conv.lastMessage?.attachments?.some((a: any) => a.is_image) ? "📷" : conv.unread}
                   </span>
                 )}
               </button>

@@ -13,6 +13,9 @@ export interface Server {
   owner_id: string
   invite_code: string
   created_at: string
+  category?: string
+  description?: string
+  is_public?: boolean
 }
 
 export interface ServerMember {
@@ -36,11 +39,18 @@ export interface Channel {
 
 export interface Attachment {
   id: string
-  message_id: string
+  message_id?: string
+  dm_id?: string
   file_url: string
   file_name: string
   file_type: string
   file_size: number
+  width?: number
+  height?: number
+  is_image?: boolean
+  thumbnail_url?: string
+  expires_at?: string | null
+  deletion_notified?: boolean
 }
 
 export interface MessageReaction {
@@ -70,6 +80,27 @@ export interface DirectMessage {
   receiver_id: string
   content: string
   read: boolean
+  created_at: string
+  sender?: Profile
+  receiver?: Profile
+  attachments?: Attachment[]
+}
+
+export interface JoinRequest {
+  id: string
+  server_id: string
+  user_id: string
+  status: "pending" | "accepted" | "rejected"
+  created_at: string
+  profile?: Profile
+  server?: Server
+}
+
+export interface Friend {
+  id: string
+  sender_id: string
+  receiver_id: string
+  status: "pending" | "accepted" | "blocked"
   created_at: string
   sender?: Profile
   receiver?: Profile

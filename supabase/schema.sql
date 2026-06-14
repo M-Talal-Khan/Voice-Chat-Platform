@@ -1,4 +1,4 @@
--- NexTalk Schema
+-- Thiscord Schema
 -- Run this in your Supabase SQL editor
 
 -- 0. Extensions
@@ -280,29 +280,43 @@ create policy "Users can remove own reactions"
   on message_reactions for delete
   using (auth.uid() = user_id);
 
--- Attachments
+-- Attachments (supports both channel messages via message_id and DMs via dm_id)
 drop policy if exists "Attachments are viewable by channel members" on attachments;
-create policy "Attachments are viewable by channel members"
+drop policy if exists "Attachments are viewable by authorized users" on attachments;
+create policy "Attachments are viewable by authorized users"
   on attachments for select
   using (
-    exists (
+    (message_id is not null and exists (
       select 1 from public.messages
       join public.channels on channels.id = messages.channel_id
       where messages.id = attachments.message_id
       and public.is_server_member(channels.server_id, auth.uid())
-    )
+    ))
+    or
+    (dm_id is not null and exists (
+      select 1 from public.direct_messages
+      where direct_messages.id = attachments.dm_id
+      and (direct_messages.sender_id = auth.uid() or direct_messages.receiver_id = auth.uid())
+    ))
   );
 
 drop policy if exists "Members can create attachments" on attachments;
-create policy "Members can create attachments"
+drop policy if exists "Authorized users can create attachments" on attachments;
+create policy "Authorized users can create attachments"
   on attachments for insert
   with check (
-    exists (
+    (message_id is not null and exists (
       select 1 from public.messages
       join public.channels on channels.id = messages.channel_id
       where messages.id = attachments.message_id
       and public.is_server_member(channels.server_id, auth.uid())
-    )
+    ))
+    or
+    (dm_id is not null and exists (
+      select 1 from public.direct_messages
+      where direct_messages.id = attachments.dm_id
+      and (direct_messages.sender_id = auth.uid() or direct_messages.receiver_id = auth.uid())
+    ))
   );
 
 -- Direct Messages
@@ -371,3 +385,95 @@ $$;
 create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- 8. Feature Updates: Explore, Friends, Attachments
+
+-- Alter existing tables
+ALTER TABLE servers ADD COLUMN IF NOT EXISTS category text default 'other';
+ALTER TABLE servers ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE servers ADD COLUMN IF NOT EXISTS is_public boolean default true;
+
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS width integer;
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS height integer;
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS is_image boolean default false;
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS thumbnail_url text;
+ALTER TABLE attachments ALTER COLUMN message_id DROP NOT NULL;
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS dm_id uuid references direct_messages(id) on delete cascade;
+
+-- Create new tables
+CREATE TABLE IF NOT EXISTS join_requests (
+  id uuid primary key default gen_random_uuid(),
+  server_id uuid references servers(id) on delete cascade,
+  user_id uuid references profiles(id) on delete cascade,
+  status text default 'pending',
+  created_at timestamptz default now(),
+  unique(server_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS friends (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid references profiles(id) on delete cascade,
+  receiver_id uuid references profiles(id) on delete cascade,
+  status text default 'pending',
+  created_at timestamptz default now(),
+  unique(sender_id, receiver_id)
+);
+
+-- Enable RLS
+ALTER TABLE join_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friends ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for join_requests
+DROP POLICY IF EXISTS "Server owner can read requests" ON join_requests;
+CREATE POLICY "Server owner can read requests" ON join_requests FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM servers WHERE servers.id = join_requests.server_id AND servers.owner_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "User can read own requests" ON join_requests;
+CREATE POLICY "User can read own requests" ON join_requests FOR SELECT USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Authenticated users can insert requests" ON join_requests;
+CREATE POLICY "Authenticated users can insert requests" ON join_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Server owner can update request" ON join_requests;
+CREATE POLICY "Server owner can update request" ON join_requests FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM servers WHERE servers.id = join_requests.server_id AND servers.owner_id = auth.uid()
+  )
+);
+
+-- RLS Policies for friends
+DROP POLICY IF EXISTS "Users can read their own friend relationships" ON friends;
+CREATE POLICY "Users can read their own friend relationships" ON friends FOR SELECT USING (
+  auth.uid() = sender_id OR auth.uid() = receiver_id
+);
+
+DROP POLICY IF EXISTS "Users can insert friend requests" ON friends;
+CREATE POLICY "Users can insert friend requests" ON friends FOR INSERT WITH CHECK (
+  auth.uid() = sender_id
+);
+
+DROP POLICY IF EXISTS "Receiver can update friend status" ON friends;
+CREATE POLICY "Receiver can update friend status" ON friends FOR UPDATE USING (
+  auth.uid() = receiver_id
+);
+
+DROP POLICY IF EXISTS "Either user can delete friendship" ON friends;
+CREATE POLICY "Either user can delete friendship" ON friends FOR DELETE USING (
+  auth.uid() = sender_id OR auth.uid() = receiver_id
+);
+
+-- Enable Realtime
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE join_requests;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE friends;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;

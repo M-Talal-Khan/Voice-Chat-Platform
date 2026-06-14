@@ -23,6 +23,8 @@ import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import { Loader2, Upload, Check, Mic, Volume2 } from "lucide-react"
 import type { Profile } from "@/lib/types"
+import { toast } from "@/hooks/use-toast"
+import Image from "next/image"
 
 export function UserSettings({
   open,
@@ -114,6 +116,13 @@ export function UserSettings({
     const supabase = createClient()
     const fileExt = file.name.split(".").pop()
     const filePath = `avatars/${currentUser.id}.${fileExt}`
+
+    const { data: buckets } = await supabase.storage.listBuckets()
+    if (!buckets?.find((b) => b.name === "avatars")) {
+      toast("Storage not set up. Please contact admin.", { variant: "destructive" })
+      setUploadingAvatar(false)
+      return
+    }
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
@@ -216,13 +225,13 @@ export function UserSettings({
               {/* Avatar */}
               <div className="flex flex-col items-center gap-3">
                 <div className="relative">
-                  <span className="flex size-16 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
+                  <span className="relative flex size-16 items-center justify-center overflow-hidden rounded-server bg-surface text-2xl font-semibold text-accent-primary">
                     {currentUser?.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={currentUser.avatar_url}
                         alt=""
-                        className="size-full rounded-full object-cover"
+                        fill
+                        className="object-cover"
                       />
                     ) : (
                       initials
@@ -230,7 +239,7 @@ export function UserSettings({
                   </span>
                   <button
                     onClick={() => fileRef.current?.click()}
-                    className="absolute bottom-0 right-0 rounded-full bg-primary p-1.5 text-primary-foreground shadow"
+                    className="absolute bottom-0 right-0 rounded-full bg-accent-primary p-1.5 text-bg-primary shadow"
                   >
                     {uploadingAvatar ? (
                       <Loader2 className="size-3 animate-spin" />
@@ -391,7 +400,7 @@ export function UserSettings({
                     <div className="mt-2">
                       <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                         <div
-                          className="h-full rounded-full bg-primary transition-all duration-100"
+                          className="h-full rounded-full bg-accent-primary transition-all duration-100"
                           style={{ width: `${audioLevel}%` }}
                         />
                       </div>

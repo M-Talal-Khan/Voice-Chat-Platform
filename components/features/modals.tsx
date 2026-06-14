@@ -31,6 +31,9 @@ export function CreateServerModal({
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("other")
+  const [isPublic, setIsPublic] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { currentUser, setServers, servers } = useAppStore()
@@ -51,6 +54,9 @@ export function CreateServerModal({
       .from("servers")
       .insert({
         name: name.trim(),
+        description: description.trim() || null,
+        category,
+        is_public: isPublic,
         owner_id: currentUser.id,
       })
       .select()
@@ -98,9 +104,56 @@ export function CreateServerModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Awesome Server"
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="server-desc">Description</FieldLabel>
+            <textarea
+              id="server-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What is this server about?"
+              className="min-h-[80px] w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2 text-sm outline-none focus-visible:border-accent-primary focus-visible:shadow-accent-focus"
+            />
+          </Field>
+          <div className="flex gap-4">
+            <Field className="flex-1">
+              <FieldLabel htmlFor="server-category">Category</FieldLabel>
+              <select
+                id="server-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2 text-sm outline-none focus-visible:border-accent-primary focus-visible:shadow-accent-focus"
+              >
+                <option value="gaming">Gaming</option>
+                <option value="music">Music</option>
+                <option value="study">Study</option>
+                <option value="friends">Friends</option>
+                <option value="art">Art</option>
+                <option value="tech">Tech</option>
+                <option value="other">Other</option>
+              </select>
+            </Field>
+            <Field className="flex-1">
+              <FieldLabel>Privacy</FieldLabel>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(!isPublic)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    isPublic ? "bg-accent-primary" : "bg-border-subtle"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isPublic ? "translate-x-4" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+                <span className="text-sm text-text-muted">{isPublic ? "Public" : "Private"}</span>
+              </div>
+            </Field>
+          </div>
           {error && <FieldError errors={[{ message: error }]} />}
         </FieldGroup>
         <div className="flex justify-end gap-2">

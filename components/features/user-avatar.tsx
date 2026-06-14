@@ -50,12 +50,12 @@ export function UserAvatar({
         <span
           aria-label={user.status}
           className={cn(
-            "absolute bottom-0 right-0 rounded-full ring-2 ring-card",
-            size === "sm" && "size-2",
-            size === "default" && "size-2.5",
-            size === "lg" && "size-3",
+            "absolute bottom-0 right-0 rounded-full ring-2 ring-bg-secondary",
+            size === "sm" && "size-2 shadow-[0_0_6px_currentColor]",
+            size === "default" && "size-2.5 shadow-[0_0_6px_currentColor]",
+            size === "lg" && "size-3 shadow-[0_0_8px_currentColor]",
           )}
-          style={{ backgroundColor: statusColor(user.status) }}
+          style={{ backgroundColor: statusColor(user.status), color: statusColor(user.status) }}
         />
       )}
     </span>

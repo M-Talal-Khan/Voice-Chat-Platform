@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Profile, Server, Channel, Message, ServerMember, DirectMessage } from "@/lib/types"
+import type { Profile, Server, Channel, Message, ServerMember, DirectMessage, Friend, JoinRequest } from "@/lib/types"
 
 interface AppState {
   // User
@@ -39,6 +39,7 @@ interface AppState {
   dmMessages: DirectMessage[]
   setDmMessages: (messages: DirectMessage[]) => void
   addDmMessage: (message: DirectMessage) => void
+  updateDmMessage: (id: string, updates: Partial<DirectMessage>) => void
 
   // Voice
   connectedVoiceChannelId: string | null
@@ -47,6 +48,17 @@ interface AppState {
   setMicOn: (on: boolean) => void
   deafened: boolean
   setDeafened: (on: boolean) => void
+
+  // Friends & Join Requests
+  friends: Friend[]
+  setFriends: (friends: Friend[]) => void
+  addFriend: (friend: Friend) => void
+  removeFriend: (id: string) => void
+  updateFriendStatus: (id: string, status: "pending" | "accepted" | "blocked") => void
+  pendingRequests: Friend[]
+  setPendingRequests: (requests: Friend[]) => void
+  joinRequests: JoinRequest[]
+  setJoinRequests: (requests: JoinRequest[]) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -70,7 +82,11 @@ export const useAppStore = create<AppState>((set) => ({
   messages: [],
   setMessages: (messages) => set({ messages }),
   addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+    set((state) => ({
+      messages: state.messages.some((m) => m.id === message.id)
+        ? state.messages.map((m) => (m.id === message.id ? { ...m, ...message } : m))
+        : [...state.messages, message],
+    })),
   updateMessage: (id, updates) =>
     set((state) => ({
       messages: state.messages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
@@ -118,7 +134,15 @@ export const useAppStore = create<AppState>((set) => ({
   dmMessages: [],
   setDmMessages: (messages) => set({ dmMessages: messages }),
   addDmMessage: (message) =>
-    set((state) => ({ dmMessages: [...state.dmMessages, message] })),
+    set((state) => ({
+      dmMessages: state.dmMessages.some((m) => m.id === message.id)
+        ? state.dmMessages.map((m) => (m.id === message.id ? { ...m, ...message } : m))
+        : [...state.dmMessages, message],
+    })),
+  updateDmMessage: (id, updates) =>
+    set((state) => ({
+      dmMessages: state.dmMessages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+    })),
 
   // Voice
   connectedVoiceChannelId: null,
@@ -127,5 +151,28 @@ export const useAppStore = create<AppState>((set) => ({
   setMicOn: (on) => set({ micOn: on }),
   deafened: false,
   setDeafened: (on) => set({ deafened: on }),
-}))
 
+  // Friends & Join Requests
+  friends: [],
+  setFriends: (friends) => set({ friends }),
+  addFriend: (friend) =>
+    set((state) => {
+      const exists = state.friends.find((f) => f.id === friend.id)
+      if (exists) {
+        return {
+          friends: state.friends.map((f) => (f.id === friend.id ? { ...f, ...friend } : f)),
+        }
+      }
+      return { friends: [...state.friends, friend] }
+    }),
+  removeFriend: (id) =>
+    set((state) => ({ friends: state.friends.filter((f) => f.id !== id) })),
+  updateFriendStatus: (id, status) =>
+    set((state) => ({
+      friends: state.friends.map((f) => (f.id === id ? { ...f, status } : f)),
+    })),
+  pendingRequests: [],
+  setPendingRequests: (requests) => set({ pendingRequests: requests }),
+  joinRequests: [],
+  setJoinRequests: (requests) => set({ joinRequests: requests }),
+}))

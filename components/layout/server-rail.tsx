@@ -2,6 +2,7 @@
 
 import { Plus, Compass, Radio, MessageSquare } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 import {
   Tooltip,
   TooltipContent,
@@ -18,6 +19,7 @@ export function ServerRail({
   onExploreServers,
   onOpenDm,
   dmActive,
+  dmBadge,
 }: {
   servers: Server[]
   activeServerId: string | null
@@ -26,25 +28,33 @@ export function ServerRail({
   onExploreServers?: () => void
   onOpenDm?: () => void
   dmActive?: boolean
+  dmBadge?: number
 }) {
   return (
     <nav
       aria-label="Servers"
-      className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 bg-rail py-3"
+      className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 bg-bg-primary py-3"
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              href="/"
-              className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-transform hover:scale-105"
-            />
-          }
-        >
-          <Radio className="size-6" />
-        </TooltipTrigger>
-        <TooltipContent side="right">Thiscord Home</TooltipContent>
-      </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Link
+                  href="/app"
+                  className="group flex size-12 items-center justify-center rounded-server bg-transparent transition-transform hover:scale-105"
+                />
+              }
+            >
+              <Image
+                src="/logo-icon.svg"
+                alt="Thiscord"
+                width={48}
+                height={48}
+                className="size-12 transition-transform duration-[600ms] group-hover:rotate-[360deg]"
+                style={{ filter: "drop-shadow(0 0 8px rgba(170, 255, 0, 0.6))" }}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="right">Thiscord Home</TooltipContent>
+          </Tooltip>
 
       {onOpenDm && (
         <>
@@ -55,19 +65,26 @@ export function ServerRail({
                   type="button"
                   onClick={onOpenDm}
                   className={cn(
-                    "flex size-12 items-center justify-center transition-all",
+                    "relative flex size-12 items-center justify-center rounded-server transition-all",
                     dmActive
-                      ? "rounded-2xl bg-primary text-primary-foreground"
-                      : "rounded-3xl bg-secondary text-secondary-foreground hover:rounded-2xl",
+                      ? "bg-accent-primary text-bg-primary shadow-accent-glow"
+                      : "bg-surface text-text-secondary hover:scale-105 hover:shadow-accent-glow",
                   )}
                 />
               }
             >
-              <MessageSquare className="size-5" />
+              <>
+                <MessageSquare className="size-5" />
+                {!!dmBadge && dmBadge > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-bg-primary bg-destructive px-1 text-[10px] font-bold text-white z-10 pointer-events-none">
+                    {dmBadge}
+                  </span>
+                )}
+              </>
             </TooltipTrigger>
             <TooltipContent side="right">Direct Messages</TooltipContent>
           </Tooltip>
-          <div className="my-1 h-px w-8 bg-border" />
+          <div className="my-1 h-px w-8 bg-border-subtle" />
         </>
       )}
 
@@ -88,7 +105,7 @@ export function ServerRail({
                 <button
                   type="button"
                   onClick={onAddServer}
-                  className="flex size-12 items-center justify-center rounded-3xl bg-secondary text-[var(--color-online)] transition-all hover:rounded-2xl hover:bg-[var(--color-online)] hover:text-primary-foreground"
+                  className="flex size-12 items-center justify-center rounded-server border-2 border-dashed border-border-subtle bg-transparent text-text-muted transition-all hover:scale-105 hover:border-accent-primary hover:text-accent-primary hover:shadow-accent-glow"
                 />
               }
             >
@@ -105,7 +122,7 @@ export function ServerRail({
                 <button
                   type="button"
                   onClick={onExploreServers}
-                  className="flex size-12 items-center justify-center rounded-3xl bg-secondary text-[var(--color-online)] transition-all hover:rounded-2xl hover:bg-[var(--color-online)] hover:text-primary-foreground"
+                  className="flex size-12 items-center justify-center rounded-server border-2 border-dashed border-border-subtle bg-transparent text-text-muted transition-all hover:scale-105 hover:border-accent-primary hover:text-accent-primary hover:shadow-accent-glow"
                 />
               }
             >
@@ -147,23 +164,20 @@ function ServerIcon({
           />
         }
       >
-        {/* active/unread pill indicator */}
+        {/* Active server: neon green left pill */}
         <span
           className={cn(
-            "absolute -left-3 w-1 rounded-r-full bg-foreground transition-all",
+            "absolute -left-3 w-1 rounded-r-full bg-accent-primary transition-all",
             active ? "h-8" : "h-0 group-hover:h-4",
           )}
         />
         <span
           className={cn(
-            "flex size-12 items-center justify-center text-sm font-semibold transition-all",
+            "flex size-12 items-center justify-center rounded-server text-sm font-semibold transition-all",
             active
-              ? "rounded-2xl text-primary-foreground"
-              : "rounded-3xl text-secondary-foreground hover:rounded-2xl",
+              ? "bg-accent-primary text-bg-primary shadow-accent-glow"
+              : "bg-surface text-text-secondary hover:scale-105 hover:shadow-accent-glow",
           )}
-          style={{
-            backgroundColor: active ? "var(--color-primary)" : "var(--color-secondary)",
-          }}
         >
           {acronym}
         </span>

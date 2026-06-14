@@ -229,14 +229,14 @@ export const messages: Message[] = [
   {
     id: "m-3",
     authorId: "u-3",
-    content: "agreed. did we decide on the accent color? the red pops really well on the dark bg",
+    content: "agreed. did we decide on the accent color? the neon green pops really well on the dark bg",
     timestamp: "9:06 AM",
     pinned: true,
   },
   {
     id: "m-4",
     authorId: "u-1",
-    content: "yep, locking in #e94560 as the accent. it's our brand now",
+    content: "yep, locking in #AAFF00 as the accent. it's our brand now",
     timestamp: "9:07 AM",
     replyToId: "m-3",
     reactions: [{ emoji: "💯", count: 3 }],
