@@ -1,6 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Space_Grotesk, Geist_Mono } from 'next/font/google'
+import { Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
@@ -11,7 +11,7 @@ const spaceGrotesk = Space_Grotesk({
   weight: ['400', '500', '600', '700'],
 })
 
-const geistMono = Geist_Mono({
+const geistMono = JetBrains_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 })
