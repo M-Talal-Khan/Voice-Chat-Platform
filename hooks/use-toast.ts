@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { toast as sonnerToast } from "sonner"
 
 export interface Toast {
   id: string
@@ -9,38 +9,24 @@ export interface Toast {
   variant?: "default" | "destructive"
 }
 
-let toastListeners: Array<(toast: Toast) => void> = []
-let toastCount = 0
-
 export function toast(
   title: string,
   opts?: { description?: string; variant?: "default" | "destructive" },
 ) {
-  const id = `toast-${++toastCount}`
-  const t: Toast = { id, title, ...opts }
-  toastListeners.forEach((listener) => listener(t))
+  if (opts?.variant === "destructive") {
+    sonnerToast.error(title, {
+      description: opts.description,
+    })
+  } else {
+    sonnerToast.success(title, {
+      description: opts.description,
+    })
+  }
 }
 
 export function useToasts() {
-  const [toasts, setToasts] = useState<Toast[]>([])
-
-  const addToast = useCallback((t: Toast) => {
-    setToasts((prev) => [...prev, t])
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((x) => x.id !== t.id))
-    }, 4000)
-  }, [])
-
-  useState(() => {
-    toastListeners.push(addToast)
-    return () => {
-      toastListeners = toastListeners.filter((l) => l !== addToast)
-    }
-  })
-
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
-
-  return { toasts, dismiss }
+  return {
+    toasts: [],
+    dismiss: () => {}
+  }
 }
