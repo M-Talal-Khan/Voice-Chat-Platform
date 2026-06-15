@@ -66,7 +66,7 @@ export function usePresence() {
       channel.untrack()
       supabase.removeChannel(channel)
     }
-  }, [currentUser?.id, currentUser?.username])
+  }, [currentUser?.id, currentUser?.username]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function useUnreadNotifications() {

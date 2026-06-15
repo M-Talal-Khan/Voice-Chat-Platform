@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
@@ -36,10 +36,18 @@ export const UserAvatar = memo(({
   showStatus?: boolean
   className?: string
 }) => {
+  const [imgError, setImgError] = useState(false)
+
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       <Avatar size={size}>
-        {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
+        {user.avatar && !imgError && (
+          <AvatarImage
+            src={user.avatar}
+            alt={user.username}
+            onError={() => setImgError(true)}
+          />
+        )}
         <AvatarFallback
           style={{ backgroundColor: user.color }}
           className="font-medium text-primary-foreground"

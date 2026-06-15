@@ -7,8 +7,9 @@ interface MessagesSlice {
   addMessage: (message: Message) => void
   updateMessage: (id: string, updates: Partial<Message>) => void
   deleteMessage: (id: string) => void
-  addReaction: (messageId: string, reaction: { emoji: string; userId: string }) => void
+  addReaction: (messageId: string, reaction: { id?: string; emoji: string; userId: string }) => void
   removeReaction: (messageId: string, emoji: string, userId: string) => void
+  removeReactionById: (reactionId: string) => void
 }
 
 const createMessagesSlice: StateCreator<AppState, [], [], MessagesSlice> = (set) => ({
@@ -33,12 +34,31 @@ const createMessagesSlice: StateCreator<AppState, [], [], MessagesSlice> = (set)
       messages: state.messages.map((m) => {
         if (m.id !== messageId) return m
         const existing = m.reactions ?? []
+        if (existing.some(r => (reaction.id && r.id === reaction.id) || (r.emoji === reaction.emoji && r.user_id === reaction.userId))) {
+           if (reaction.id) {
+             return {
+               ...m,
+               reactions: existing.map(r => (r.emoji === reaction.emoji && r.user_id === reaction.userId) ? { ...r, id: reaction.id! } : r)
+             }
+           }
+           return m
+        }
         return {
           ...m,
           reactions: [
             ...existing,
-            { id: "", message_id: messageId, user_id: reaction.userId, emoji: reaction.emoji },
+            { id: reaction.id ?? "", message_id: messageId, user_id: reaction.userId, emoji: reaction.emoji },
           ],
+        }
+      }),
+    })),
+  removeReactionById: (reactionId) =>
+    set((state) => ({
+      messages: state.messages.map((m) => {
+        if (!m.reactions?.some(r => r.id === reactionId)) return m
+        return {
+          ...m,
+          reactions: m.reactions.filter(r => r.id !== reactionId),
         }
       }),
     })),
@@ -179,11 +199,15 @@ const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set) => ({
 interface UISlice {
   isConnected: boolean
   setIsConnected: (connected: boolean) => void
+  storageError: boolean
+  setStorageError: (error: boolean) => void
 }
 
 const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
   isConnected: true,
   setIsConnected: (connected) => set({ isConnected: connected }),
+  storageError: false,
+  setStorageError: (error) => set({ storageError: error }),
 })
 
 type AppState = MessagesSlice & ServersSlice & DMSlice & VoiceSlice & UserSlice & UISlice

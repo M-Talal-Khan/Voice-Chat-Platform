@@ -198,8 +198,9 @@ export function JoinServerModal({
       setServers([...servers, server as any])
       setCode("")
       onOpenChange(false)
-    } catch (err: any) {
-      setError(err.message || "Failed to join server")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to join server"
+      setError(message)
     } finally {
       setLoading(false)
     }

@@ -25,6 +25,7 @@ import { Loader2, Upload, Check, Mic, Volume2 } from "lucide-react"
 import type { Profile } from "@/lib/types"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
+import { compressImage } from "@/lib/media-utils"
 
 export function UserSettings({
   open,
@@ -58,13 +59,15 @@ export function UserSettings({
 
   // Load audio devices
   useEffect(() => {
-    navigator.mediaDevices?.enumerateDevices().then((devices) => {
-      setAudioDevices(devices)
-      const mics = devices.filter((d) => d.kind === "audioinput")
-      const speakers = devices.filter((d) => d.kind === "audiooutput")
-      if (mics.length > 0) setMicDevice(mics[0].deviceId)
-      if (speakers.length > 0) setSpeakerDevice(speakers[0].deviceId)
-    })
+    if (open) {
+      navigator.mediaDevices?.enumerateDevices().then((devices) => {
+        setAudioDevices(devices)
+        const mics = devices.filter((d) => d.kind === "audioinput")
+        const speakers = devices.filter((d) => d.kind === "audiooutput")
+        if (mics.length > 0) setMicDevice(mics[0].deviceId)
+        if (speakers.length > 0) setSpeakerDevice(speakers[0].deviceId)
+      })
+    }
   }, [open])
 
   // Reset form when opened
@@ -81,31 +84,37 @@ export function UserSettings({
     setSaving(true)
     const supabase = createClient()
 
-    // Check availability
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", username.trim())
-      .neq("id", currentUser.id)
-      .maybeSingle()
+    try {
+      // Check availability
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", username.trim())
+        .neq("id", currentUser.id)
+        .maybeSingle()
 
-    if (existing) {
-      setUsernameError("Username already taken")
+      if (existing) {
+        setUsernameError("Username already taken")
+        setSaving(false)
+        return
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ username: username.trim() })
+        .eq("id", currentUser.id)
+
+      if (error) {
+        setUsernameError(error.message)
+      } else {
+        setCurrentUser({ ...currentUser, username: username.trim() } as Profile)
+        toast("Username updated!")
+      }
+    } catch (err) {
+      toast("Failed to update username. Please try again.", { variant: "destructive" })
+    } finally {
       setSaving(false)
-      return
     }
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ username: username.trim() })
-      .eq("id", currentUser.id)
-
-    if (error) {
-      setUsernameError(error.message)
-    } else {
-      setCurrentUser({ ...currentUser, username: username.trim() } as Profile)
-    }
-    setSaving(false)
   }
 
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -114,38 +123,53 @@ export function UserSettings({
 
     setUploadingAvatar(true)
     const supabase = createClient()
-    const fileExt = file.name.split(".").pop()
-    const filePath = `avatars/${currentUser.id}.${fileExt}`
 
-    const { data: buckets } = await supabase.storage.listBuckets()
-    if (!buckets?.find((b) => b.name === "avatars")) {
-      toast("Storage not set up. Please contact admin.", { variant: "destructive" })
-      setUploadingAvatar(false)
-      return
-    }
+    try {
+      // Test bucket access first (silent)
+      await supabase.storage.from('avatars').list('', { limit: 1 })
 
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(filePath, file, { upsert: true })
+      // Compress image
+      const { file: compressedFile } = await compressImage(file)
 
-    if (uploadError) {
-      setUploadingAvatar(false)
-      return
-    }
+      const fileExt = "webp"
+      const filePath = `${currentUser.id}/avatar.${fileExt}`
 
-    const { data: urlData } = await supabase.storage
-      .from("avatars")
-      .getPublicUrl(filePath)
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, compressedFile, {
+          upsert: true,
+          contentType: 'image/webp',
+          cacheControl: '3600'
+        })
 
-    if (urlData) {
-      await supabase
+      if (uploadError) {
+        toast("Failed to upload photo. Please try again.", { variant: "destructive" })
+        setUploadingAvatar(false)
+        return
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath)
+
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`
+
+      const { error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: urlData.publicUrl })
+        .update({ avatar_url: publicUrl })
         .eq("id", currentUser.id)
 
-      setCurrentUser({ ...currentUser, avatar_url: urlData.publicUrl } as Profile)
+      if (updateError) {
+        toast("Failed to save photo. Please try again.", { variant: "destructive" })
+      } else {
+        setCurrentUser({ ...currentUser, avatar_url: publicUrl } as Profile)
+        toast("Profile photo updated!")
+      }
+    } catch (err) {
+      toast("Something went wrong. Please try again.", { variant: "destructive" })
+    } finally {
+      setUploadingAvatar(false)
     }
-    setUploadingAvatar(false)
   }
 
   async function handleUpdateStatus(newStatus: string) {
@@ -190,7 +214,7 @@ export function UserSettings({
       const bufferLength = analyser.frequencyBinCount
       const dataArray = new Uint8Array(bufferLength)
 
-      function updateLevel() {
+      const updateLevel = () => {
         if (!testing) return
         analyser.getByteFrequencyData(dataArray)
         const avg = dataArray.reduce((a, b) => a + b, 0) / bufferLength
@@ -203,7 +227,7 @@ export function UserSettings({
     }
   }
 
-  const initials = currentUser?.username?.slice(0, 2).toUpperCase() ?? "NT"
+  const initials = currentUser?.username?.slice(0, 2).toUpperCase() ?? "??"
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

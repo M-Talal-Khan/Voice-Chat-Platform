@@ -37,7 +37,7 @@ export function DmSidebar() {
 
       const seen = new Map<string, { user: Profile; lastMessage: DirectMessage; unread: number }>()
 
-      for (const dm of data as any[]) {
+      for (const dm of (data as unknown as (DirectMessage & { sender: Profile; receiver: Profile })[])) {
         const otherUser: Profile = dm.sender_id === userId ? dm.receiver : dm.sender
         if (!otherUser) continue
 
@@ -127,7 +127,7 @@ export function DmSidebar() {
                 <span className="truncate">{conv.user.username}</span>
                 {conv.unread > 0 && (
                   <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-accent-primary text-[10px] font-bold text-bg-primary">
-                    {conv.lastMessage?.attachments?.some((a: any) => a.is_image) ? "📷" : conv.unread}
+                    {conv.lastMessage?.attachments?.some((a) => a.is_image) ? "📷" : conv.unread}
                   </span>
                 )}
               </button>

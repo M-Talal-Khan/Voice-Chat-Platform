@@ -38,11 +38,21 @@ A fully featured Discord/TeamSpeak clone built with Next.js 14 App Router, Tailw
    cp .env.local.example .env.local
    ```
 
-4. **Database Setup:**
+4. **Database & Storage Setup:**
    Run the following scripts in your Supabase SQL Editor in order:
    - `supabase/schema.sql` (Complete schema)
    - `supabase/migrations/001_missing_tables.sql` (Friends and Join Requests)
    - `supabase/storage-setup.sql` (Storage buckets and policies)
+
+   ### Storage Setup (Required)
+   Before using profile pictures or file uploads, you must configure the storage buckets:
+   1. Go to [supabase.com](https://supabase.com) and open your project.
+   2. Click **SQL Editor** in the left sidebar.
+   3. Click **New Query**.
+   4. Open `supabase/storage-setup.sql` in this repo.
+   5. Copy the entire contents and paste into the SQL Editor.
+   6. Click **Run**.
+   7. You should see a "Success" message.
 
 5. **Run the app:**
    ```bash

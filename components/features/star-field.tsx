@@ -8,6 +8,11 @@ interface StarFieldProps {
   isAuthPage?: boolean
 }
 
+interface StarInstance {
+  update: () => void
+  draw: () => void
+}
+
 export function StarField({ className, isAuthPage = false }: StarFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -18,7 +23,7 @@ export function StarField({ className, isAuthPage = false }: StarFieldProps) {
     if (!ctx) return
 
     let animationFrameId: number
-    let stars: any[] = []
+    let stars: StarInstance[] = []
     
     // Mouse state
     let mouse = {

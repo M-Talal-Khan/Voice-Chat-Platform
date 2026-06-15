@@ -30,6 +30,7 @@ import { toast } from "@/hooks/use-toast"
 import type { Message } from "@/lib/types"
 import { ChatInput, type FileAttachment } from "@/components/features/chat-input"
 import { AttachmentGallery } from "@/components/features/attachment-gallery"
+import { EmojiPicker } from "@/components/ui/emoji-picker"
 import { getImageDimensions } from "@/lib/media-utils"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -257,6 +258,49 @@ function ChatView({
           useAppStore.getState().deleteMessage(payload.old.id as string)
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_reactions",
+        },
+        (payload) => {
+          const { id, message_id, emoji, user_id } = payload.new as any
+          useAppStore.getState().addReaction(message_id, { id, emoji, userId: user_id })
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "message_reactions",
+        },
+        (payload) => {
+          const { id } = payload.old as any
+          useAppStore.getState().removeReactionById(id)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "attachments",
+        },
+        async (payload) => {
+          const att = payload.new as any
+          if (att.message_id) {
+            const { data: fullMsg } = await supabase
+              .from("messages")
+              .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
+              .eq("id", att.message_id)
+              .single()
+            if (fullMsg) useAppStore.getState().updateMessage(att.message_id, fullMsg as any)
+          }
+        }
+      )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true)
@@ -268,7 +312,7 @@ function ChatView({
 
     // Monitor connection
     supabase.getChannels().forEach(channel => {
-      channel.on('system', {}, (status: any) => {
+      channel.on('system', {}, (status: string) => {
         if (status === 'disconnected') setIsConnected(false)
         if (status === 'reconnected') {
           setIsConnected(true)
@@ -386,7 +430,7 @@ function ChatView({
 
           const expiresAt = new Date(Date.now() + 49 * 24 * 60 * 60 * 1000).toISOString()
 
-          await supabase.from("attachments").insert({
+          const { error: attError } = await supabase.from("attachments").insert({
             message_id: msg.id,
             file_url: urlData.publicUrl,
             file_name: att.file.name,
@@ -397,6 +441,11 @@ function ChatView({
             height,
             expires_at: expiresAt,
           })
+
+          if (attError) {
+            toast("Upload failed. Please try again.", { variant: "destructive" })
+            return
+          }
         }
 
         // Re-fetch to get attachments
@@ -408,9 +457,9 @@ function ChatView({
 
         if (finalMsg) updateMessage(msg.id, finalMsg as any)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       deleteMessage(optimisticId)
-      toast("Failed to send message", { description: err.message, variant: "destructive" })
+      toast("Upload failed. Please try again.", { variant: "destructive" })
     }
   }
 
@@ -710,19 +759,32 @@ const MessageBubble = memo(({
               <SmilePlus className="size-3.5" />
             </button>
             {showEmojis && (
-              <div className="absolute top-full right-0 z-50 mt-1 flex gap-0.5 rounded-lg border border-border-subtle bg-surface p-1 shadow-lg backdrop-blur-[10px]">
-                {EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => {
-                      handleReaction(emoji)
-                      setShowEmojis(false)
-                    }}
-                    className="rounded p-1 text-sm hover:bg-muted"
-                  >
-                    {emoji}
-                  </button>
-                ))}
+              <div className="absolute top-full right-0 z-50 mt-1 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-bg-secondary border border-border-subtle rounded-xl overflow-hidden p-2 flex flex-col gap-2">
+                   <div className="flex gap-1">
+                      {EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            handleReaction(emoji)
+                            setShowEmojis(false)
+                          }}
+                          className="size-8 flex items-center justify-center rounded hover:bg-surface text-lg transition-colors"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                   </div>
+                   <div className="border-t border-border-subtle pt-2">
+                      <EmojiPicker
+                        onEmojiSelect={(emoji) => {
+                          handleReaction(emoji)
+                          setShowEmojis(false)
+                        }}
+                        onClickOutside={() => setShowEmojis(false)}
+                      />
+                   </div>
+                </div>
               </div>
             )}
           </div>

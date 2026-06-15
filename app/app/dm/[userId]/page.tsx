@@ -175,9 +175,10 @@ export default function DMPage() {
       
       useAppStore.getState().deleteDmMessage(optimisticId)
       addDmMessage(data as any)
-    } catch (err: any) {
+    } catch (err: unknown) {
       useAppStore.getState().deleteDmMessage(optimisticId)
-      toast("Failed to send message", { description: err.message, variant: "destructive" })
+      const message = err instanceof Error ? err.message : "An unexpected error occurred"
+      toast("Failed to send message", { description: message, variant: "destructive" })
     }
   }
 

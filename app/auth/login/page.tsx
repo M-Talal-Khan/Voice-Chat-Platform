@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useState, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -61,8 +61,9 @@ function LoginForm() {
       const redirect = searchParams.get("redirect") || "/app"
       router.push(redirect)
       router.refresh()
-    } catch (err: any) {
-      setError(err?.message || "An unexpected error occurred.")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "An unexpected error occurred"
+      setError(message)
       setLoading(false)
     }
   }
