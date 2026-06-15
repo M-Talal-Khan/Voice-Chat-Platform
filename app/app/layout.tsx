@@ -7,7 +7,6 @@ import { ChannelSidebar } from "@/components/layout/channel-sidebar"
 import { DmSidebar } from "@/components/layout/dm-sidebar"
 import { VoiceProvider } from "@/components/features/voice-provider"
 import { UserSettings } from "@/components/features/user-settings"
-import { ToastContainer } from "@/components/layout/toast-container"
 import { ErrorBoundary } from "@/components/features/error-boundary"
 import {
   CreateServerModal,
@@ -17,6 +16,7 @@ import {
   DeleteServerModal,
 } from "@/components/features/modals"
 import { ServerSettingsModal } from "@/components/features/server-settings"
+import { CommandPalette } from "@/components/features/command-palette"
 import {
   Dialog,
   DialogContent,
@@ -349,8 +349,8 @@ export default function AppLayout({
       {/* User Settings */}
       <UserSettings open={showUserSettings} onOpenChange={setShowUserSettings} />
 
-      {/* Toast notifications */}
-      <ToastContainer />
+      {/* Command Palette */}
+      <CommandPalette />
 
       {/* Modals */}
       <CreateServerModal open={showCreateServer} onOpenChange={setShowCreateServer} />

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { Send, Loader2, Paperclip, X, FileText, Image as ImageIcon } from "lucide-react"
 import Image from "next/image"
 import { compressImage } from "@/lib/media-utils"
+import { toast } from "@/hooks/use-toast"
 
 export interface FileAttachment {
   file: File
@@ -68,14 +69,20 @@ export function ChatInput({
       const maxSize = isImage ? 8 * 1024 * 1024 : 25 * 1024 * 1024
       
       if (file.size > maxSize) {
-        alert(`File ${file.name} is too large. Max size is ${isImage ? '8MB' : '25MB'}.`)
+        toast(`File ${file.name} is too large`, {
+          description: `Max size is ${isImage ? '8MB' : '25MB'}.`,
+          variant: "destructive"
+        })
         continue
       }
 
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
       const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'zip', 'mp3', 'mp4']
       if (!allowedExts.includes(ext)) {
-        alert(`File ${file.name} has an unsupported format.`)
+        toast(`File ${file.name} unsupported`, {
+          description: "Format not allowed.",
+          variant: "destructive"
+        })
         continue
       }
 
