@@ -2,7 +2,7 @@ export interface Profile {
   id: string
   username: string
   avatar_url: string | null
-  status: "online" | "idle" | "dnd" | "offline"
+  status: "online" | "offline" | "idle" | "dnd"
   created_at: string
 }
 
@@ -12,10 +12,10 @@ export interface Server {
   icon_url: string | null
   owner_id: string
   invite_code: string
+  category: string | null
+  description: string | null
+  is_public: boolean
   created_at: string
-  category?: string
-  description?: string
-  is_public?: boolean
 }
 
 export interface ServerMember {
@@ -37,29 +37,6 @@ export interface Channel {
   created_at: string
 }
 
-export interface Attachment {
-  id: string
-  message_id?: string
-  dm_id?: string
-  file_url: string
-  file_name: string
-  file_type: string
-  file_size: number
-  width?: number
-  height?: number
-  is_image?: boolean
-  thumbnail_url?: string
-  expires_at?: string | null
-  deletion_notified?: boolean
-}
-
-export interface MessageReaction {
-  id: string
-  message_id: string
-  user_id: string
-  emoji: string
-}
-
 export interface Message {
   id: string
   channel_id: string
@@ -71,7 +48,29 @@ export interface Message {
   profile?: Profile
   reactions?: MessageReaction[]
   attachments?: Attachment[]
-  reply_to?: Message
+  reply_to?: Message | null
+  isPending?: boolean
+}
+
+export interface MessageReaction {
+  id: string
+  message_id: string
+  user_id: string
+  emoji: string
+}
+
+export interface Attachment {
+  id: string
+  message_id: string | null
+  dm_id: string | null
+  file_url: string
+  file_name: string
+  file_type: string
+  file_size: number
+  is_image: boolean
+  width: number | null
+  height: number | null
+  expires_at: string
 }
 
 export interface DirectMessage {
@@ -81,9 +80,17 @@ export interface DirectMessage {
   content: string
   read: boolean
   created_at: string
-  sender?: Profile
-  receiver?: Profile
   attachments?: Attachment[]
+  isPending?: boolean
+}
+
+export interface Friend {
+  id: string
+  sender_id: string
+  receiver_id: string
+  status: "pending" | "accepted" | "blocked"
+  created_at: string
+  profile?: Profile
 }
 
 export interface JoinRequest {
@@ -93,15 +100,4 @@ export interface JoinRequest {
   status: "pending" | "accepted" | "rejected"
   created_at: string
   profile?: Profile
-  server?: Server
-}
-
-export interface Friend {
-  id: string
-  sender_id: string
-  receiver_id: string
-  status: "pending" | "accepted" | "blocked"
-  created_at: string
-  sender?: Profile
-  receiver?: Profile
 }

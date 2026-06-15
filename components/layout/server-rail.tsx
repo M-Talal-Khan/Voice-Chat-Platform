@@ -1,6 +1,7 @@
 "use client"
 
-import { Plus, Compass, Radio, MessageSquare } from "lucide-react"
+import { memo, useMemo } from "react"
+import { Plus, Compass, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import {
@@ -136,7 +137,7 @@ export function ServerRail({
   )
 }
 
-function ServerIcon({
+const ServerIcon = memo(({
   server,
   active,
   onClick,
@@ -144,13 +145,13 @@ function ServerIcon({
   server: Server
   active: boolean
   onClick: () => void
-}) {
-  const acronym = server.name
+}) => {
+  const acronym = useMemo(() => server.name
     .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0])
     .join("")
-    .toUpperCase()
+    .toUpperCase(), [server.name])
 
   return (
     <Tooltip>
@@ -185,4 +186,6 @@ function ServerIcon({
       <TooltipContent side="right">{server.name}</TooltipContent>
     </Tooltip>
   )
-}
+})
+
+ServerIcon.displayName = "ServerIcon"

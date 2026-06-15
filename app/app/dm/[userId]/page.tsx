@@ -1,26 +1,45 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { useParams } from "next/navigation"
-import { Send, Loader2 } from "lucide-react"
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react"
+import {
+  Send,
+  Loader2,
+  ChevronDown,
+  Camera,
+  Search,
+  Hash,
+  MessageSquare,
+  ArrowLeft,
+  RefreshCw,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import type { DirectMessage, Profile } from "@/lib/types"
 import { ChatInput, type FileAttachment } from "@/components/features/chat-input"
 import { AttachmentGallery } from "@/components/features/attachment-gallery"
-import { getImageDimensions } from "@/lib/media-utils"
+import { useParams, useRouter } from "next/navigation"
+import Image from "next/image"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
-export default function DmChatPage() {
-  const params = useParams()
-  const otherUserId = params.userId as string
-  const { currentUser, dmMessages, setDmMessages, addDmMessage } = useAppStore()
+export default function DMPage() {
+  const { userId: otherUserId } = useParams() as { userId: string }
+  const currentUser = useAppStore((state) => state.currentUser)
+  const dmMessages = useAppStore((state) => state.dmMessages)
+  const setDmMessages = useAppStore((state) => state.setDmMessages)
+  const addDmMessage = useAppStore((state) => state.addDmMessage)
+  const isConnected = useAppStore((state) => state.isConnected)
+  const setIsConnected = useAppStore((state) => state.setIsConnected)
+
   const [otherUser, setOtherUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     if (!currentUser || !otherUserId) return
+
     const supabase = createClient()
 
     // Fetch other user profile
@@ -29,34 +48,37 @@ export default function DmChatPage() {
       .select("*")
       .eq("id", otherUserId)
       .single()
-      .then(({ data }) => {
-        if (data) setOtherUser(data as Profile)
-      })
+      .then(({ data }) => setOtherUser(data))
 
-    // Fetch last 50 DMs
+    // Fetch initial DMs
     supabase
       .from("direct_messages")
-      .select("*, sender:sender_id(*), receiver:receiver_id(*), attachments:attachments(*)")
+      .select(`
+        *,
+        attachments:attachments(*)
+      `)
       .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUser.id})`)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data }) => {
-        if (data) setDmMessages(data as any)
-        setLoading(false)
-
-        // Mark as read
-        for (const dm of data ?? []) {
-          if (!dm.read && dm.receiver_id === currentUser.id) {
-            supabase
-              .from("direct_messages")
-              .update({ read: true })
-              .eq("id", dm.id)
+        if (data) {
+          setDmMessages((data as any).reverse())
+          // Mark as read
+          for (const dm of data) {
+            if (!dm.read && dm.receiver_id === currentUser.id) {
+              supabase
+                .from("direct_messages")
+                .update({ read: true })
+                .eq("id", dm.id)
+                .then()
+            }
           }
         }
+        setLoading(false)
       })
 
     // Realtime subscription
-    const channel = supabase
+    const realtimeChannel = supabase
       .channel(`dm:${currentUser.id}:${otherUserId}`)
       .on(
         "postgres_changes",
@@ -64,246 +86,228 @@ export default function DmChatPage() {
           event: "INSERT",
           schema: "public",
           table: "direct_messages",
-          filter: `and(or(sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}),or(sender_id.eq.${otherUserId},receiver_id.eq.${otherUserId}))`,
         },
         async (payload) => {
-          const { data } = await supabase
-            .from("direct_messages")
-            .select("*, sender:sender_id(*), receiver:receiver_id(*), attachments:attachments(*)")
-            .eq("id", payload.new.id)
-            .single()
-          if (data) {
-            addDmMessage(data as any)
-            // Mark as read
-            if (!data.read && data.receiver_id === currentUser.id) {
-              supabase.from("direct_messages").update({ read: true }).eq("id", data.id)
-            }
-            if (data.sender_id !== currentUser.id) {
-              const hasImage = data.attachments?.some((a: any) => a.is_image)
-              const title = hasImage 
-                ? `📷 ${data.sender?.username} sent an image`
-                : `${data.sender?.username} sent a message`
-              toast(title, { description: data.content })
-            }
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "attachments",
-        },
-        async (payload) => {
-          const dmId = payload.new.dm_id
-          if (!dmId) return
-          const existing = useAppStore.getState().dmMessages.find((m) => m.id === dmId)
-          if (existing) {
-            const { data } = await supabase
+          const msg = payload.new as DirectMessage
+          // Filter for current conversation
+          if (
+            (msg.sender_id === currentUser.id && msg.receiver_id === otherUserId) ||
+            (msg.sender_id === otherUserId && msg.receiver_id === currentUser.id)
+          ) {
+            // Fetch with attachments
+            const { data: fullMsg } = await supabase
               .from("direct_messages")
-              .select("*, sender:sender_id(*), receiver:receiver_id(*), attachments:attachments(*)")
-              .eq("id", dmId)
+              .select("*, attachments:attachments(*)")
+              .eq("id", msg.id)
               .single()
-            if (data) {
-              useAppStore.getState().updateDmMessage(dmId, data as any)
+
+            if (fullMsg) {
+              addDmMessage(fullMsg as any)
+              if (fullMsg.receiver_id === currentUser.id) {
+                supabase.from("direct_messages").update({ read: true }).eq("id", fullMsg.id).then()
+              }
             }
           }
-        },
+        }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setIsConnected(true)
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setIsConnected(false)
+      })
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(realtimeChannel)
+      setDmMessages([])
     }
-  }, [currentUser, otherUserId, setDmMessages, addDmMessage])
+  }, [currentUser, otherUserId, setDmMessages, addDmMessage, setIsConnected])
+
+  const parentRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: dmMessages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    overscan: 10,
+  })
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [dmMessages.length])
+    if (autoScroll && dmMessages.length > 0) {
+      virtualizer.scrollToIndex(dmMessages.length - 1, { align: 'end', behavior: 'smooth' })
+    }
+  }, [dmMessages.length, autoScroll, virtualizer])
 
-  async function handleSendMessage(content: string, attachments: FileAttachment[]) {
-    if (!currentUser) return
+  const handleScroll = useCallback(() => {
+    if (!parentRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current
+    setAutoScroll(scrollHeight - scrollTop - clientHeight < 100)
+  }, [])
+
+  const handleSendMessage = async (content: string, attachments: FileAttachment[]) => {
+    if (!currentUser || !otherUserId) return
     const supabase = createClient()
 
-    // Create message first
-    const { data: msg, error: msgError } = await supabase
-      .from("direct_messages")
-      .insert({
-        sender_id: currentUser.id,
-        receiver_id: otherUserId,
-        content: content || "",
-      })
-      .select("*, sender:sender_id(*), receiver:receiver_id(*)")
-      .single()
+    const optimisticId = `temp-${Date.now()}`
+    const optimisticMessage: DirectMessage = {
+      id: optimisticId,
+      sender_id: currentUser.id,
+      receiver_id: otherUserId,
+      content: content.trim(),
+      created_at: new Date().toISOString(),
+      read: false,
+      attachments: [],
+      isPending: true
+    }
 
-    if (msgError || !msg) throw new Error(msgError?.message || "Failed to send DM")
+    addDmMessage(optimisticMessage)
+    setAutoScroll(true)
 
-    addDmMessage(msg as any)
-
-    // Upload attachments
-    if (attachments.length > 0) {
-      const { data: buckets } = await supabase.storage.listBuckets()
-      if (!buckets?.find((b) => b.name === "attachments")) {
-        toast("Storage not set up. Please contact admin.", { variant: "destructive" })
-        return
-      }
-
-      for (const att of attachments) {
-        const fileExt = att.file.name.split(".").pop()
-        const filePath = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-        
-        const { error: uploadError } = await supabase.storage
-          .from("attachments")
-          .upload(filePath, att.file, { cacheControl: "3600", upsert: false })
-          
-        if (uploadError) {
-          continue
-        }
-
-        const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(filePath)
-        
-        const isImage = att.file.type.startsWith("image/")
-        let width = null
-        let height = null
-        if (isImage) {
-          try {
-            const dims = await getImageDimensions(att.file)
-            width = dims.width
-            height = dims.height
-          } catch (e) {}
-        }
-
-        const expiresAt = new Date(Date.now() + 49 * 24 * 60 * 60 * 1000).toISOString()
-
-        const { error: attError } = await supabase.from("attachments").insert({
-          dm_id: msg.id,
-          file_url: urlData.publicUrl,
-          file_name: att.file.name,
-          file_type: att.file.type,
-          file_size: att.file.size,
-          is_image: isImage,
-          width,
-          height,
-          expires_at: expiresAt,
-        })
-
-        if (attError) {
-          // Do nothing
-        }
-      }
-      
-      // Re-fetch the full message with attachments so the sender sees the image
-      const { data: fullMsg } = await supabase
+    try {
+      const { data, error } = await supabase
         .from("direct_messages")
-        .select("*, sender:sender_id(*), receiver:receiver_id(*), attachments:attachments(*)")
-        .eq("id", msg.id)
+        .insert({
+          sender_id: currentUser.id,
+          receiver_id: otherUserId,
+          content: content.trim(),
+        })
+        .select("*, attachments:attachments(*)")
         .single()
+
+      if (error) throw error
       
-      if (fullMsg) {
-        useAppStore.getState().updateDmMessage(msg.id, fullMsg as any)
-      }
+      useAppStore.getState().deleteDmMessage(optimisticId)
+      addDmMessage(data as any)
+    } catch (err: any) {
+      useAppStore.getState().deleteDmMessage(optimisticId)
+      toast("Failed to send message", { description: err.message, variant: "destructive" })
     }
   }
 
-  const initials = otherUser?.username?.slice(0, 2).toUpperCase() ?? "??"
+  if (!otherUser && !loading) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center bg-bg-primary">
+        <p className="text-text-muted">User not found</p>
+        <Button variant="ghost" onClick={() => router.push("/app")} className="mt-4">
+          <ArrowLeft className="mr-2 size-4" /> Go back
+        </Button>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col relative bg-bg-primary">
+      {!isConnected && (
+        <div className="bg-[#FFB800] text-black px-4 py-1 flex items-center justify-center gap-2 text-xs font-bold">
+          <RefreshCw className="size-3 animate-spin" />
+          Reconnecting...
+        </div>
+      )}
+
       {/* Header */}
-      <div className="glass flex h-12 shrink-0 items-center gap-2 border-b border-border-subtle px-4">
-        {otherUser && (
-          <>
-            <span
-              className="inline-block size-2 rounded-full"
-              style={{
-                backgroundColor: otherUser.status === "online"
-                  ? "var(--color-online)"
-                  : "var(--color-offline)",
-              }}
-            />
-            <span className="font-semibold">{otherUser.username}</span>
-          </>
+      <div className="glass flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle px-4">
+        <MessageSquare className="size-4 text-text-muted" />
+        <span className="font-semibold">{otherUser?.username ?? "Loading..."}</span>
+        {otherUser?.status && (
+          <div className="flex items-center gap-1.5 ml-auto">
+            <div className={`size-2 rounded-full ${otherUser.status === 'online' ? 'bg-[#AAFF00] shadow-[0_0_8px_#AAFF00]' : 'bg-text-muted'}`} />
+            <span className="text-xs text-text-muted capitalize">{otherUser.status}</span>
+          </div>
         )}
-        {!otherUser && <span className="font-semibold">Direct Message</span>}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div
+        ref={parentRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-4"
+      >
         {loading ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3">
-            <div className="h-8 w-32 skeleton rounded-lg" />
-            <p className="text-sm text-text-muted text-muted-opacity">
-              definitely not copying anyone...
-            </p>
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="size-8 animate-spin text-accent-primary" />
           </div>
         ) : dmMessages.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-text-muted text-muted-opacity">
-              no messages yet, be the first to say something totally original
-            </p>
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="size-20 rounded-full bg-surface flex items-center justify-center mb-4">
+               <MessageSquare className="size-10 text-text-muted" />
+            </div>
+            <h3 className="text-xl font-bold">This is the start of your DM history with {otherUser?.username}</h3>
+            <p className="text-sm text-text-muted mt-2">Say something nice!</p>
           </div>
         ) : (
-          <div className="space-y-0.5">
-            {dmMessages.map((dm, idx) => {
-              const prev = idx > 0 ? dmMessages[idx - 1] : null
-              const isFirst =
-                !prev ||
-                prev.sender_id !== dm.sender_id ||
-                new Date(dm.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000
-
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const dm = dmMessages[virtualItem.index]
+              const isFirst = virtualItem.index === 0 || dmMessages[virtualItem.index - 1]?.sender_id !== dm.sender_id
               const profile = dm.sender_id === currentUser?.id ? currentUser : otherUser
-              const initials = profile?.username?.slice(0, 2).toUpperCase() ?? "??"
-
-              const time = dm.created_at
-                ? new Date(dm.created_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : ""
 
               return (
-                <div key={dm.id} className="group relative flex items-start gap-3 rounded-md px-2 py-0.5 transition-colors hover:bg-bg-secondary/50">
-                  {/* Avatar or spacer */}
-                  {isFirst ? (
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-server bg-surface text-xs font-semibold text-accent-primary">
-                      {initials}
-                    </span>
-                  ) : (
-                    <span className="invisible flex size-9 shrink-0 items-center justify-center text-[10px] text-text-muted group-hover:visible">
-                      {time}
-                    </span>
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    {isFirst && (
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-semibold text-text-primary">{profile?.username ?? "Unknown"}</span>
-                        <span className="text-[11px] text-text-muted">{time}</span>
-                      </div>
-                    )}
-                    {dm.content && (
-                      <p className="text-[15px] leading-[1.6] text-text-secondary">{dm.content}</p>
-                    )}
-
-                    {/* Attachments */}
-                    {dm.attachments && dm.attachments.length > 0 && (
-                      <AttachmentGallery attachments={dm.attachments} />
-                    )}
-                  </div>
+                <div
+                  key={dm.id}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  <DMMessageItem dm={dm} isFirst={isFirst} profile={profile} />
                 </div>
               )
             })}
-            <div ref={bottomRef} />
           </div>
         )}
       </div>
 
-      {/* Input */}
       <ChatInput
-        placeholder={`Message ${otherUser?.username ?? "user"}`}
+        placeholder={`Message @${otherUser?.username ?? "user"}`}
         onSendMessage={handleSendMessage}
       />
     </div>
   )
 }
+
+const DMMessageItem = memo(({ dm, isFirst, profile }: { dm: DirectMessage, isFirst: boolean, profile: Profile | null }) => {
+  const time = dm.created_at ? new Date(dm.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""
+
+  return (
+    <div className={`group relative flex items-start gap-3 rounded-md px-2 py-0.5 transition-colors hover:bg-bg-secondary/50 ${dm.isPending ? 'opacity-70' : ''}`}>
+      {isFirst ? (
+        <div className="size-9 shrink-0 overflow-hidden rounded-server bg-surface">
+           {profile?.avatar_url ? (
+             <Image src={profile.avatar_url} alt="" width={36} height={36} className="object-cover" />
+           ) : (
+             <div className="flex h-full w-full items-center justify-center text-xs font-bold text-accent-primary">
+               {profile?.username?.slice(0, 2).toUpperCase() ?? "??"}
+             </div>
+           )}
+        </div>
+      ) : (
+        <div className="invisible group-hover:visible w-9 text-right text-[10px] text-text-muted">
+          {time}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        {isFirst && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-semibold text-text-primary">{profile?.username ?? "Unknown"}</span>
+            <span className="text-[11px] text-text-muted flex items-center gap-1">
+              {time}
+              {dm.isPending && <Loader2 className="size-2 animate-spin" />}
+            </span>
+          </div>
+        )}
+        <p className="text-[15px] leading-[1.6] text-text-secondary whitespace-pre-wrap">{dm.content}</p>
+        {dm.attachments && <AttachmentGallery attachments={dm.attachments} />}
+      </div>
+    </div>
+  )
+})
+
+DMMessageItem.displayName = "DMMessageItem"

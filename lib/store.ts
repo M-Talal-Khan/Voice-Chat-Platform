@@ -1,24 +1,7 @@
-import { create } from "zustand"
+import { create, StateCreator } from "zustand"
 import type { Profile, Server, Channel, Message, ServerMember, DirectMessage, Friend, JoinRequest } from "@/lib/types"
 
-interface AppState {
-  // User
-  currentUser: Profile | null
-  setCurrentUser: (user: Profile | null) => void
-
-  // Server
-  selectedServer: Server | null
-  setSelectedServer: (server: Server | null) => void
-  servers: Server[]
-  setServers: (servers: Server[]) => void
-
-  // Channels
-  selectedChannel: Channel | null
-  setSelectedChannel: (channel: Channel | null) => void
-  channels: Channel[]
-  setChannels: (channels: Channel[]) => void
-
-  // Messages
+interface MessagesSlice {
   messages: Message[]
   setMessages: (messages: Message[]) => void
   addMessage: (message: Message) => void
@@ -26,59 +9,9 @@ interface AppState {
   deleteMessage: (id: string) => void
   addReaction: (messageId: string, reaction: { emoji: string; userId: string }) => void
   removeReaction: (messageId: string, emoji: string, userId: string) => void
-
-  // Members
-  members: ServerMember[]
-  setMembers: (members: ServerMember[]) => void
-
-  // Direct Messages
-  dmView: boolean
-  setDmView: (view: boolean) => void
-  selectedDmUser: Profile | null
-  setSelectedDmUser: (user: Profile | null) => void
-  dmMessages: DirectMessage[]
-  setDmMessages: (messages: DirectMessage[]) => void
-  addDmMessage: (message: DirectMessage) => void
-  updateDmMessage: (id: string, updates: Partial<DirectMessage>) => void
-
-  // Voice
-  connectedVoiceChannelId: string | null
-  setConnectedVoiceChannelId: (id: string | null) => void
-  micOn: boolean
-  setMicOn: (on: boolean) => void
-  deafened: boolean
-  setDeafened: (on: boolean) => void
-
-  // Friends & Join Requests
-  friends: Friend[]
-  setFriends: (friends: Friend[]) => void
-  addFriend: (friend: Friend) => void
-  removeFriend: (id: string) => void
-  updateFriendStatus: (id: string, status: "pending" | "accepted" | "blocked") => void
-  pendingRequests: Friend[]
-  setPendingRequests: (requests: Friend[]) => void
-  joinRequests: JoinRequest[]
-  setJoinRequests: (requests: JoinRequest[]) => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  // User
-  currentUser: null,
-  setCurrentUser: (user) => set({ currentUser: user }),
-
-  // Server
-  selectedServer: null,
-  setSelectedServer: (server) => set({ selectedServer: server }),
-  servers: [],
-  setServers: (servers) => set({ servers }),
-
-  // Channels
-  selectedChannel: null,
-  setSelectedChannel: (channel) => set({ selectedChannel: channel }),
-  channels: [],
-  setChannels: (channels) => set({ channels }),
-
-  // Messages
+const createMessagesSlice: StateCreator<AppState, [], [], MessagesSlice> = (set) => ({
   messages: [],
   setMessages: (messages) => set({ messages }),
   addMessage: (message) =>
@@ -121,12 +54,47 @@ export const useAppStore = create<AppState>((set) => ({
         }
       }),
     })),
+})
 
-  // Members
+interface ServersSlice {
+  selectedServer: Server | null
+  setSelectedServer: (server: Server | null) => void
+  servers: Server[]
+  setServers: (servers: Server[]) => void
+  selectedChannel: Channel | null
+  setSelectedChannel: (channel: Channel | null) => void
+  channels: Channel[]
+  setChannels: (channels: Channel[]) => void
+  members: ServerMember[]
+  setMembers: (members: ServerMember[]) => void
+}
+
+const createServersSlice: StateCreator<AppState, [], [], ServersSlice> = (set) => ({
+  selectedServer: null,
+  setSelectedServer: (server) => set({ selectedServer: server }),
+  servers: [],
+  setServers: (servers) => set({ servers }),
+  selectedChannel: null,
+  setSelectedChannel: (channel) => set({ selectedChannel: channel }),
+  channels: [],
+  setChannels: (channels) => set({ channels }),
   members: [],
   setMembers: (members) => set({ members }),
+})
 
-  // Direct Messages
+interface DMSlice {
+  dmView: boolean
+  setDmView: (view: boolean) => void
+  selectedDmUser: Profile | null
+  setSelectedDmUser: (user: Profile | null) => void
+  dmMessages: DirectMessage[]
+  setDmMessages: (messages: DirectMessage[]) => void
+  addDmMessage: (message: DirectMessage) => void
+  updateDmMessage: (id: string, updates: Partial<DirectMessage>) => void
+  deleteDmMessage: (id: string) => void
+}
+
+const createDMSlice: StateCreator<AppState, [], [], DMSlice> = (set) => ({
   dmView: false,
   setDmView: (view) => set({ dmView: view }),
   selectedDmUser: null,
@@ -143,16 +111,47 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       dmMessages: state.dmMessages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
     })),
+  deleteDmMessage: (id) =>
+    set((state) => ({
+      dmMessages: state.dmMessages.filter((m) => m.id !== id),
+    })),
+})
 
-  // Voice
+interface VoiceSlice {
+  connectedVoiceChannelId: string | null
+  setConnectedVoiceChannelId: (id: string | null) => void
+  micOn: boolean
+  setMicOn: (on: boolean) => void
+  deafened: boolean
+  setDeafened: (on: boolean) => void
+}
+
+const createVoiceSlice: StateCreator<AppState, [], [], VoiceSlice> = (set) => ({
   connectedVoiceChannelId: null,
   setConnectedVoiceChannelId: (id) => set({ connectedVoiceChannelId: id }),
   micOn: true,
   setMicOn: (on) => set({ micOn: on }),
   deafened: false,
   setDeafened: (on) => set({ deafened: on }),
+})
 
-  // Friends & Join Requests
+interface UserSlice {
+  currentUser: Profile | null
+  setCurrentUser: (user: Profile | null) => void
+  friends: Friend[]
+  setFriends: (friends: Friend[]) => void
+  addFriend: (friend: Friend) => void
+  removeFriend: (id: string) => void
+  updateFriendStatus: (id: string, status: "pending" | "accepted" | "blocked") => void
+  pendingRequests: Friend[]
+  setPendingRequests: (requests: Friend[]) => void
+  joinRequests: JoinRequest[]
+  setJoinRequests: (requests: JoinRequest[]) => void
+}
+
+const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set) => ({
+  currentUser: null,
+  setCurrentUser: (user) => set({ currentUser: user }),
   friends: [],
   setFriends: (friends) => set({ friends }),
   addFriend: (friend) =>
@@ -175,4 +174,25 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingRequests: (requests) => set({ pendingRequests: requests }),
   joinRequests: [],
   setJoinRequests: (requests) => set({ joinRequests: requests }),
+})
+
+interface UISlice {
+  isConnected: boolean
+  setIsConnected: (connected: boolean) => void
+}
+
+const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
+  isConnected: true,
+  setIsConnected: (connected) => set({ isConnected: connected }),
+})
+
+type AppState = MessagesSlice & ServersSlice & DMSlice & VoiceSlice & UserSlice & UISlice
+
+export const useAppStore = create<AppState>()((...a) => ({
+  ...createMessagesSlice(...a),
+  ...createServersSlice(...a),
+  ...createDMSlice(...a),
+  ...createVoiceSlice(...a),
+  ...createUserSlice(...a),
+  ...createUISlice(...a),
 }))

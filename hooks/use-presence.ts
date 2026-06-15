@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAppStore } from "@/lib/store"
 
 export function usePresence() {
-  const { currentUser, setCurrentUser } = useAppStore()
-  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null)
+  const currentUser = useAppStore(state => state.currentUser)
+  const setCurrentUser = useAppStore(state => state.setCurrentUser)
 
   useEffect(() => {
     if (!currentUser) return
@@ -20,7 +20,7 @@ export function usePresence() {
       .update({ status: "online" })
       .eq("id", userId)
       .then(() => {
-        setCurrentUser({ ...currentUser, status: "online" } as any)
+        // We don't want to trigger a full re-render here if not needed
       })
 
     // Join presence channel
@@ -34,13 +34,7 @@ export function usePresence() {
 
     channel
       .on("presence", { event: "sync" }, () => {
-        // Could track presence state here
-      })
-      .on("presence", { event: "join" }, ({ key }) => {
-        // User joined
-      })
-      .on("presence", { event: "leave" }, ({ key }) => {
-        // User left
+        // Track presence state if needed globally
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -52,15 +46,12 @@ export function usePresence() {
         }
       })
 
-    channelRef.current = channel
-
     // Handle tab close
     function handleBeforeUnload() {
       supabase
         .from("profiles")
         .update({ status: "offline" })
         .eq("id", userId)
-
       channel.untrack()
     }
 
@@ -75,29 +66,27 @@ export function usePresence() {
       channel.untrack()
       supabase.removeChannel(channel)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id])
+  }, [currentUser?.id, currentUser?.username])
 }
 
 export function useUnreadNotifications() {
-  const { messages, dmMessages } = useAppStore()
-  const unreadCount = messages.length > 0 || dmMessages.length > 0
+  const messages = useAppStore(state => state.messages)
+  const dmMessages = useAppStore(state => state.dmMessages)
 
   useEffect(() => {
-    const total = messages.length + dmMessages.length
-
+    const total = messages.filter(m => m.isPending).length + dmMessages.filter(m => m.isPending).length
+    // This is just a placeholder for real unread logic which would involve last_read_at
     if (total > 0) {
       document.title = `(${total}) Thiscord`
     } else {
       document.title = "Thiscord"
     }
 
-    // Clear on focus
     function handleFocus() {
       document.title = "Thiscord"
     }
 
     window.addEventListener("focus", handleFocus)
     return () => window.removeEventListener("focus", handleFocus)
-  }, [messages.length, dmMessages.length])
+  }, [messages, dmMessages])
 }
