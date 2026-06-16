@@ -25,8 +25,8 @@ export function toast(
 }
 
 export function useToasts() {
-  return {
-    toasts: [],
-    dismiss: () => {}
+  return { 
+    toasts: [], 
+    dismiss: () => {} 
   }
 }

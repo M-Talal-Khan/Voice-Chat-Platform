@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, memo, useMemo } from "react"
 import {
   ChevronDown,
   Hash,
@@ -33,12 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { UserAvatar, type AvatarUser } from "@/components/features/user-avatar"
@@ -52,7 +47,6 @@ export function ChannelSidebar({
   activeChannelId,
   onSelectChannel,
   connectedVoiceId,
-  onJoinVoice,
   onLeaveVoice,
   micOn,
   onToggleMic,
@@ -72,7 +66,6 @@ export function ChannelSidebar({
   activeChannelId: string
   onSelectChannel: (id: string) => void
   connectedVoiceId: string | null
-  onJoinVoice: (id: string) => void
   onLeaveVoice: () => void
   micOn: boolean
   onToggleMic: () => void
@@ -88,13 +81,17 @@ export function ChannelSidebar({
   onMessageMember?: (userId: string) => void
 }) {
   const [query, setQuery] = useState("")
-  const { currentUser, setCurrentUser, members, setMessages } = useAppStore()
+  const currentUser = useAppStore((state) => state.currentUser)
+  const setCurrentUser = useAppStore((state) => state.setCurrentUser)
+  const members = useAppStore((state) => state.members)
+  const setMessages = useAppStore((state) => state.setMessages)
 
-  const filtered = channels.filter((c) =>
+  const filteredChannels = useMemo(() => channels.filter((c) =>
     c.name.toLowerCase().includes(query.toLowerCase()),
-  )
-  const textChannels = filtered.filter((c) => c.type === "text")
-  const voiceChannels = filtered.filter((c) => c.type === "voice")
+  ), [channels, query])
+
+  const textChannels = useMemo(() => filteredChannels.filter((c) => c.type === "text"), [filteredChannels])
+  const voiceChannels = useMemo(() => filteredChannels.filter((c) => c.type === "voice"), [filteredChannels])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -106,12 +103,9 @@ export function ChannelSidebar({
 
   const [showServerMenu, setShowServerMenu] = useState(false)
 
-  const onlineMembers = members.filter(
+  const onlineMembers = useMemo(() => members.filter(
     (m) => m.profile?.status === "online" || m.profile?.status === "idle" || m.profile?.status === "dnd",
-  )
-  const offlineMembers = members.filter(
-    (m) => m.profile?.status === "offline" || !m.profile?.status,
-  )
+  ), [members])
 
   return (
     <div className="flex h-full w-60 shrink-0 flex-col border-r border-border-subtle bg-bg-secondary">
@@ -212,14 +206,8 @@ export function ChannelSidebar({
                   key={m.id} 
                   member={m} 
                   onClick={() => onMessageMember?.(m.user_id)} 
-                  connectedVoiceId={connectedVoiceId}
                 />
               ))}
-              {onlineMembers.length > 8 && (
-                <div className="px-2 py-1 text-xs text-text-muted">
-                  and {onlineMembers.length - 8} more online
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -269,7 +257,6 @@ export function ChannelSidebar({
                   initials: currentUser.username.slice(0, 2).toUpperCase(),
                   color: "var(--accent-dark)",
                   status: currentUser.status,
-                  customStatus: undefined,
                   avatar: currentUser.avatar_url ?? undefined,
                 } as AvatarUser
               }
@@ -315,26 +302,15 @@ export function ChannelSidebar({
   )
 }
 
-function MemberRow({ member, onClick, connectedVoiceId }: { member: ServerMember; onClick?: () => void; connectedVoiceId?: string | null }) {
+const MemberRow = memo(({ member, onClick }: { member: ServerMember; onClick?: () => void }) => {
   const [open, setOpen] = useState(false)
   if (!member.profile) return null
-
-  const isTyping = false // Placeholder for typing indicator
-  const isInVoice = false // Placeholder for voice indicator
-  const statusColor =
-    member.profile.status === "online"
-      ? "var(--color-online)"
-      : member.profile.status === "idle"
-        ? "var(--color-idle)"
-        : member.profile.status === "dnd"
-          ? "var(--color-dnd)"
-          : "var(--color-offline)"
 
   const avatarUser = {
     id: member.profile.id,
     username: member.profile.username,
     initials: member.profile.username.slice(0, 2).toUpperCase(),
-    color: "var(--accent-dark)", // Fallback color
+    color: "var(--accent-dark)",
     status: member.profile.status,
     avatar: member.profile.avatar_url ?? undefined,
   } as AvatarUser
@@ -361,18 +337,6 @@ function MemberRow({ member, onClick, connectedVoiceId }: { member: ServerMember
         <span className="truncate text-sm font-medium text-text-muted transition-colors group-hover:text-text-primary">
           {member.profile.username}
         </span>
-
-        {isInVoice && (
-          <Volume2 className="ml-auto size-3.5 text-text-muted opacity-70" />
-        )}
-
-        {isTyping && (
-          <span className="ml-auto flex items-center gap-0.5">
-            <span className="size-1 rounded-full bg-accent-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-            <span className="size-1 rounded-full bg-accent-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-            <span className="size-1 rounded-full bg-accent-primary animate-bounce" style={{ animationDelay: "300ms" }} />
-          </span>
-        )}
       </PopoverTrigger>
       <PopoverContent side="right" align="start" className="w-64 p-0 shadow-2xl bg-bg-secondary border-border-subtle" sideOffset={12}>
         <div className="h-16 w-full rounded-t-lg bg-surface relative">
@@ -397,7 +361,9 @@ function MemberRow({ member, onClick, connectedVoiceId }: { member: ServerMember
       </PopoverContent>
     </Popover>
   )
-}
+})
+
+MemberRow.displayName = "MemberRow"
 
 function ChannelSection({
   label,
@@ -437,7 +403,7 @@ function ChannelSection({
   )
 }
 
-function TextChannelRow({
+const TextChannelRow = memo(({
   channel,
   active,
   onClick,
@@ -445,7 +411,7 @@ function TextChannelRow({
   channel: Channel
   active: boolean
   onClick: () => void
-}) {
+}) => {
   return (
     <button
       type="button"
@@ -473,9 +439,11 @@ function TextChannelRow({
       </span>
     </button>
   )
-}
+})
 
-function VoiceChannelRow({
+TextChannelRow.displayName = "TextChannelRow"
+
+const VoiceChannelRow = memo(({
   channel,
   active,
   connected,
@@ -485,7 +453,7 @@ function VoiceChannelRow({
   active: boolean
   connected: boolean
   onClick: () => void
-}) {
+}) => {
   return (
     <button
       type="button"
@@ -503,7 +471,9 @@ function VoiceChannelRow({
       <span className={cn("truncate", connected && "font-medium text-accent-primary")}>{channel.name}</span>
     </button>
   )
-}
+})
+
+VoiceChannelRow.displayName = "VoiceChannelRow"
 
 function ControlButton({
   label,

@@ -58,12 +58,12 @@ export default function ExplorePage() {
 
       const requestMap = new Map(requestData?.map((r) => [r.server_id, r.status]) || [])
 
-      const formatted = serverData.map((s: any) => ({
+      const formatted = (serverData as any).map((s: any) => ({
         ...s,
         member_count: s.server_members[0]?.count || 0,
         is_member: joinedServerIds.has(s.id),
         request_status: requestMap.get(s.id),
-      }))
+      })) as ExploreServer[]
 
       setServers(formatted)
       setLoading(false)
@@ -236,7 +236,7 @@ export default function ExplorePage() {
   )
 }
 
-function Compass(props: any) {
+function Compass(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}

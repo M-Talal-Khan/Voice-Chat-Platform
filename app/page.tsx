@@ -11,6 +11,7 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion"
+import { usePerformanceDetection } from "@/lib/performance"
 
 /* ─── Starburst SVG (pre-computed path to avoid hydration mismatch) ── */
 const STARBURST_PATH =
@@ -45,13 +46,13 @@ export default function LandingPage() {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
   const [hasMounted, setHasMounted] = useState(false)
+  const { isLowEnd, prefersReducedMotion } = usePerformanceDetection()
 
   // Mouse position for parallax + repulsion
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
 
   // Starburst repulsion springs
-
   const repelX = useSpring(0, { stiffness: 100, damping: 20 })
   const repelY = useSpring(0, { stiffness: 100, damping: 20 })
 
@@ -66,7 +67,7 @@ export default function LandingPage() {
   }, [])
 
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    if (!containerRef.current) return
+    if (!containerRef.current || isLowEnd) return
     const rect = containerRef.current.getBoundingClientRect()
     const normX = ((e.clientX - rect.left) / rect.width) * 2 - 1
     const normY = ((e.clientY - rect.top) / rect.height) * 2 - 1
@@ -74,7 +75,6 @@ export default function LandingPage() {
     mouseY.set(normY)
 
     // Starburst repulsion
-    // Starburst center is approximately at 70% from left, 50% from top
     const starCenterX = rect.left + rect.width * 0.72
     const starCenterY = rect.top + rect.height * 0.45
 
@@ -107,14 +107,14 @@ export default function LandingPage() {
     hidden: {},
     visible: {
       transition: {
-        staggerChildren: 0.15,
+        staggerChildren: prefersReducedMotion ? 0 : 0.15,
         delayChildren: 0.1,
       },
     },
   }
 
   const textSlideUp = {
-    hidden: { y: 100, opacity: 0 },
+    hidden: { y: prefersReducedMotion ? 0 : 100, opacity: 0 },
     visible: {
       y: 0,
       opacity: 1,
@@ -146,13 +146,13 @@ export default function LandingPage() {
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      <GrainOverlay />
+      {!isLowEnd && <GrainOverlay />}
 
       {/* Radial gradient center glow */}
       <div className="landing-center-glow" aria-hidden="true" />
 
       {/* Background Star Field */}
-      <StarField />
+      {!isLowEnd && <StarField />}
 
       {/* Dark vignette edges */}
       <div className="landing-vignette" aria-hidden="true" />
@@ -176,15 +176,17 @@ export default function LandingPage() {
         </motion.div>
 
         {/* ── Ghost Background Text ── */}
-        <motion.div
-          className="landing-ghost-text"
-          variants={fadeIn}
-          aria-hidden="true"
-        >
-          <motion.span style={{ x: parallaxX2, y: parallaxY2 }}>
-            dddddiscord
-          </motion.span>
-        </motion.div>
+        {!prefersReducedMotion && (
+          <motion.div
+            className="landing-ghost-text"
+            variants={fadeIn}
+            aria-hidden="true"
+          >
+            <motion.span style={{ x: parallaxX2, y: parallaxY2 }}>
+              dddddiscord
+            </motion.span>
+          </motion.div>
+        )}
 
         {/* ── Hero Typography ── */}
         <div className="landing-hero-text">
@@ -192,7 +194,7 @@ export default function LandingPage() {
             <motion.h1
               className="landing-hero-line1"
               variants={textSlideUp}
-              style={{ x: parallaxX1, y: parallaxY1 }}
+              style={{ x: !prefersReducedMotion ? parallaxX1 : 0, y: !prefersReducedMotion ? parallaxY1 : 0 }}
             >
               not
             </motion.h1>
@@ -201,7 +203,7 @@ export default function LandingPage() {
             <motion.h1
               className="landing-hero-line2"
               variants={textSlideUp}
-              style={{ x: parallaxX2, y: parallaxY2 }}
+              style={{ x: !prefersReducedMotion ? parallaxX2 : 0, y: !prefersReducedMotion ? parallaxY2 : 0 }}
             >
               Discord.
             </motion.h1>
@@ -212,11 +214,11 @@ export default function LandingPage() {
         <motion.div
           className="landing-starburst-container"
           variants={starburstVariant}
-          style={{ x: repelX, y: repelY }}
+          style={{ x: !prefersReducedMotion ? repelX : 0, y: !prefersReducedMotion ? repelY : 0 }}
         >
           <motion.div
             className="landing-starburst-inner"
-            animate={{ rotate: 360 }}
+            animate={!prefersReducedMotion ? { rotate: 360 } : {}}
             transition={{
               duration: 30,
               repeat: Infinity,
@@ -240,12 +242,16 @@ export default function LandingPage() {
         </motion.p>
 
         {/* ── Easter Eggs ── */}
-        <motion.p className="landing-easter-egg-1" variants={fadeIn}>
-          discord at home
-        </motion.p>
-        <motion.p className="landing-easter-egg-2" variants={fadeIn}>
-          made by people who forgot to buy discord nitro
-        </motion.p>
+        {!isLowEnd && (
+          <>
+            <motion.p className="landing-easter-egg-1" variants={fadeIn}>
+              discord at home
+            </motion.p>
+            <motion.p className="landing-easter-egg-2" variants={fadeIn}>
+              made by people who forgot to buy discord nitro
+            </motion.p>
+          </>
+        )}
       </motion.div>
     </div>
   )

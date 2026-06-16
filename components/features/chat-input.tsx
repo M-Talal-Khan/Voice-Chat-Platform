@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { Send, Loader2, Paperclip, X, FileText, Image as ImageIcon } from "lucide-react"
 import Image from "next/image"
 import { compressImage } from "@/lib/media-utils"
 import { toast } from "@/hooks/use-toast"
+import { debounce } from "lodash"
 
 export interface FileAttachment {
   file: File
@@ -20,43 +21,69 @@ export interface FileAttachment {
 interface ChatInputProps {
   placeholder: string
   onSendMessage: (content: string, attachments: FileAttachment[]) => Promise<void>
+  onTyping?: () => void
   disabled?: boolean
   replyToPreview?: React.ReactNode
   onReplyClear?: () => void
   channelName?: string
 }
 
-export function ChatInput({
+export const ChatInput = memo(({
   placeholder,
   onSendMessage,
+  onTyping,
   disabled,
   replyToPreview,
   onReplyClear,
   channelName,
-}: ChatInputProps) {
+}: ChatInputProps) => {
   const [content, setContent] = useState("")
   const [sending, setSending] = useState(false)
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const handleSend = async (e?: React.FormEvent) => {
-    e?.preventDefault()
+  const handleSend = async () => {
     if ((!content.trim() && attachments.length === 0) || sending || disabled) return
 
     setSending(true)
+    const currentContent = content.trim()
+    const currentAttachments = [...attachments]
     
+    setContent("")
+    setAttachments([])
+    onReplyClear?.()
+    
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"
+    }
+
     try {
-      await onSendMessage(content.trim(), attachments)
-      setContent("")
-      setAttachments([])
-      onReplyClear?.()
+      await onSendMessage(currentContent, currentAttachments)
     } catch (err) {
-      // Do nothing on err or handle silently
+      setContent(currentContent)
+      setAttachments(currentAttachments)
+      toast("Failed to send message", { variant: "destructive" })
     } finally {
       setSending(false)
+      textareaRef.current?.focus()
     }
+  }
+
+  const debouncedTyping = useRef(debounce(() => {
+    onTyping?.()
+  }, 500)).current
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value)
+    if (e.target.value.length > 0) {
+      debouncedTyping()
+    }
+    
+    // Auto resize
+    e.target.style.height = "auto"
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`
   }
 
   const processFiles = useCallback(async (files: FileList | File[]) => {
@@ -97,7 +124,7 @@ export function ChatInput({
           originalSize = res.originalSize
           previewUrl = URL.createObjectURL(processedFile)
         } catch (e) {
-          // Compression failed, use original file
+          // Fallback to original
         }
       }
 
@@ -131,7 +158,6 @@ export function ChatInput({
     })
   }
 
-  // Handle Drag & Drop
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault()
@@ -164,7 +190,6 @@ export function ChatInput({
     }
   }, [processFiles])
 
-  // Handle Paste
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
@@ -176,8 +201,7 @@ export function ChatInput({
   }, [processFiles])
 
   return (
-    <div className="relative shrink-0 border-t border-border-subtle px-4 py-3">
-      {/* Drag overlay */}
+    <div className="relative shrink-0 border-t border-border-subtle px-4 py-3 bg-bg-primary z-10">
       {isDragging && (
         <div className="absolute inset-x-0 bottom-0 z-50 flex h-full items-center justify-center rounded-lg border-2 border-dashed border-[#AAFF00] bg-black/80 backdrop-blur-sm pointer-events-none">
           <div className="flex flex-col items-center gap-2">
@@ -191,7 +215,6 @@ export function ChatInput({
 
       {replyToPreview}
 
-      {/* Attachments Preview */}
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2 rounded-lg bg-bg-secondary p-2">
           {attachments.map((att, idx) => (
@@ -226,7 +249,7 @@ export function ChatInput({
         </div>
       )}
 
-      <form onSubmit={handleSend} className="flex items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary px-3 py-2 transition-colors focus-within:border-accent-primary focus-within:shadow-accent-focus">
+      <div className="flex items-end gap-2 rounded-lg border border-border-subtle bg-bg-secondary px-3 py-2 transition-colors focus-within:border-accent-primary focus-within:shadow-accent-focus">
         <input
           ref={fileRef}
           type="file"
@@ -239,27 +262,39 @@ export function ChatInput({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={disabled || sending}
-          className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          className="rounded p-1 text-text-muted transition-colors hover:text-text-primary disabled:opacity-50 mb-1"
           title="Attach files"
         >
           <Paperclip className="size-4" />
         </button>
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={handleContentChange}
           placeholder={placeholder}
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-muted resize-none py-1 min-h-[20px] max-h-[200px]"
           disabled={sending || disabled}
+          onKeyDown={(e) => {
+             if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSend()
+             }
+          }}
         />
+        <div className="text-[10px] text-text-muted mb-2 mr-1">
+           {content.length}/2000
+        </div>
         <button
-          type="submit"
+          onClick={handleSend}
           disabled={(!content.trim() && attachments.length === 0) || sending || disabled}
-          className="rounded-md bg-accent-primary p-1.5 font-bold text-bg-primary transition-all hover:bg-accent-hover active:scale-[0.97] disabled:opacity-50"
+          className="rounded-md bg-accent-primary p-1.5 font-bold text-bg-primary transition-all hover:bg-accent-hover active:scale-[0.97] disabled:opacity-50 mb-0.5"
         >
           {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         </button>
-      </form>
+      </div>
     </div>
   )
-}
+})
+
+ChatInput.displayName = "ChatInput"

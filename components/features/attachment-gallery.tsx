@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { FileText, X, ChevronLeft, ChevronRight, Download } from "lucide-react"
+import { FileText, X, Download } from "lucide-react"
 import type { Attachment } from "@/lib/types"
 import Image from "next/image"
 
@@ -30,17 +30,19 @@ export function AttachmentGallery({ attachments }: { attachments: Attachment[] }
 
           if (isImage) {
             return (
-              <div key={attachment.id} className="mt-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={attachment.file_url}
-                  alt={attachment.file_name}
-                  className="max-w-[400px] max-h-[300px] rounded-lg object-cover cursor-pointer"
+              <div key={attachment.id} className="mt-2 relative">
+                <div 
+                  className="relative max-w-[400px] aspect-video overflow-hidden rounded-lg cursor-pointer"
                   onClick={() => setLightboxUrl(attachment.file_url)}
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none"
-                  }}
-                />
+                >
+                  <Image
+                    src={attachment.file_url}
+                    alt={attachment.file_name}
+                    fill
+                    className="object-cover"
+                    sizes="400px"
+                  />
+                </div>
               </div>
             )
           }
@@ -81,17 +83,17 @@ export function AttachmentGallery({ attachments }: { attachments: Attachment[] }
         >
           <button
             onClick={() => setLightboxUrl(null)}
-            className="absolute right-4 top-4 rounded-full bg-surface/20 p-2 text-white transition-colors hover:bg-surface/40"
+            className="absolute right-4 top-4 rounded-full bg-surface/20 p-2 text-white transition-colors hover:bg-surface/40 z-[60]"
           >
             <X className="size-6" />
           </button>
           
           <div className="relative size-full flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={lightboxUrl}
               alt="Preview"
-              className="max-h-full max-w-full object-contain"
+              fill
+              className="object-contain"
               onClick={(e) => e.stopPropagation()}
             />
           </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react"
 import {
   Hash,
   Volume2,
@@ -19,6 +19,8 @@ import {
   PhoneOff,
   Headphones,
   Camera,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react"
 import { useParticipants } from "@livekit/components-react"
 import { Button } from "@/components/ui/button"
@@ -28,9 +30,11 @@ import { toast } from "@/hooks/use-toast"
 import type { Message } from "@/lib/types"
 import { ChatInput, type FileAttachment } from "@/components/features/chat-input"
 import { AttachmentGallery } from "@/components/features/attachment-gallery"
+import { EmojiPicker } from "@/components/ui/emoji-picker"
 import { getImageDimensions } from "@/lib/media-utils"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 function FloatingDots() {
   return (
@@ -54,7 +58,11 @@ function FloatingDots() {
 }
 
 export default function AppPage() {
-  const { selectedChannel, selectedServer } = useAppStore()
+  const selectedServer = useAppStore((state) => state.selectedServer)
+  const selectedChannel = useAppStore((state) => state.selectedChannel)
+  const setSelectedChannel = useAppStore((state) => state.setSelectedChannel)
+  const channels = useAppStore((state) => state.channels)
+  const members = useAppStore((state) => state.members)
 
   const router = useRouter()
 
@@ -96,15 +104,15 @@ export default function AppPage() {
           </div>
           <h2 className="text-2xl font-bold tracking-heading text-text-primary mb-2">{selectedServer.name}</h2>
           <p className="text-sm text-text-muted text-muted-opacity mb-8">
-            {useAppStore.getState().members.filter(m => m.profile?.status === 'online').length} members online
+            {members.filter(m => m.profile?.status === 'online').length} members online
           </p>
           <div className="w-full glass-strong rounded-xl p-4 border border-border-subtle">
             <h3 className="text-xs font-semibold uppercase tracking-section text-text-muted mb-3 text-left">Jump into a channel</h3>
             <div className="flex flex-col gap-1">
-              {useAppStore.getState().channels.slice(0, 5).map(c => (
+              {channels.slice(0, 5).map(c => (
                 <button
                   key={c.id}
-                  onClick={() => useAppStore.getState().setSelectedChannel(c)}
+                  onClick={() => setSelectedChannel(c)}
                   className="flex items-center gap-2 p-2 rounded hover:bg-surface text-left transition-colors text-sm"
                 >
                   {c.type === 'voice' ? <Volume2 className="size-4 text-text-muted" /> : <Hash className="size-4 text-text-muted" />}
@@ -136,37 +144,63 @@ function ChatView({
   channelName: string
   channelTopic?: string
 }) {
-  const { messages, setMessages } = useAppStore()
+  const messages = useAppStore((state) => state.messages)
+  const setMessages = useAppStore((state) => state.setMessages)
+  const addMessage = useAppStore((state) => state.addMessage)
+  const updateMessage = useAppStore((state) => state.updateMessage)
+  const deleteMessage = useAppStore((state) => state.deleteMessage)
+  const currentUser = useAppStore((state) => state.currentUser)
+  const isConnected = useAppStore((state) => state.isConnected)
+  const setIsConnected = useAppStore((state) => state.setIsConnected)
+
   const [loading, setLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
-  const [typingUsers, setTypingUsers] = useState<string[]>([])
 
-  // Fetch messages
-  useEffect(() => {
-    setLoading(true)
+  const fetchMessages = useCallback(async (cId: string, before?: string) => {
     const supabase = createClient()
-
-    supabase
+    let query = supabase
       .from("messages")
-      .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
-      .eq("channel_id", channelId)
+      .select(`
+        *,
+        profile:profiles(*),
+        reactions:message_reactions(*),
+        attachments:attachments(*),
+        reply_to:messages(
+          id,
+          content,
+          profile:profiles(username, avatar_url)
+        )
+      `)
+      .eq("channel_id", cId)
       .order("created_at", { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        if (data) {
-          setMessages((data as any).reverse())
-          setHasMore(data.length === 50)
-        }
-        setLoading(false)
-      })
 
-    // Realtime subscription
-    const channel = supabase
-      .channel(`messages:${channelId}`)
+    if (before) {
+      query = query.lt("created_at", before)
+    }
+
+    const { data } = await query
+    return data
+  }, [])
+
+  // Initial fetch
+  useEffect(() => {
+    setLoading(true)
+    fetchMessages(channelId).then((data) => {
+      if (data) {
+        setMessages((data as any).reverse())
+        setHasMore(data.length === 50)
+      }
+      setLoading(false)
+    })
+
+    const supabase = createClient()
+    const realtimeChannel = supabase
+      .channel(`messages-${channelId}`)
       .on(
         "postgres_changes",
         {
@@ -176,21 +210,27 @@ function ChatView({
           filter: `channel_id=eq.${channelId}`,
         },
         async (payload) => {
-          const { data } = await supabase
+          // Dedup
+          if (useAppStore.getState().messages.some(m => m.id === payload.new.id)) return
+
+          const { data: fullMessage } = await supabase
             .from("messages")
-            .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
+            .select(`
+              *,
+              profile:profiles(*),
+              reactions:message_reactions(*),
+              attachments:attachments(*),
+              reply_to:messages(
+                id,
+                content,
+                profile:profiles(username, avatar_url)
+              )
+            `)
             .eq("id", payload.new.id)
             .single()
-          if (data) {
-            useAppStore.getState().addMessage(data as any)
-            const currentUser = useAppStore.getState().currentUser
-            if (currentUser && data.user_id !== currentUser.id) {
-              const hasImage = data.attachments?.some((a: any) => a.is_image)
-              const title = hasImage 
-                ? `📷 ${data.profile?.username} sent an image`
-                : `${data.profile?.username} sent a message`
-              toast(title, { description: data.content })
-            }
+
+          if (fullMessage) {
+            useAppStore.getState().addMessage(fullMessage as any)
           }
         },
       )
@@ -223,155 +263,216 @@ function ChatView({
         {
           event: "INSERT",
           schema: "public",
+          table: "message_reactions",
+        },
+        (payload) => {
+          const { id, message_id, emoji, user_id } = payload.new as any
+          useAppStore.getState().addReaction(message_id, { id, emoji, userId: user_id })
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "message_reactions",
+        },
+        (payload) => {
+          const { id } = payload.old as any
+          useAppStore.getState().removeReactionById(id)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
           table: "attachments",
         },
         async (payload) => {
-          const msgId = payload.new.message_id
-          if (!msgId) return
-          const existing = useAppStore.getState().messages.find((m) => m.id === msgId)
-          if (existing) {
-            const { data } = await supabase
+          const att = payload.new as any
+          if (att.message_id) {
+            const { data: fullMsg } = await supabase
               .from("messages")
               .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
-              .eq("id", msgId)
+              .eq("id", att.message_id)
               .single()
-            if (data) {
-              useAppStore.getState().updateMessage(msgId, data as any)
-            }
+            if (fullMsg) useAppStore.getState().updateMessage(att.message_id, fullMsg as any)
           }
-        },
+        }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true)
+        }
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setIsConnected(false)
+        }
+      })
+
+    // Monitor connection
+    supabase.getChannels().forEach(channel => {
+      channel.on('system', {}, (status: string) => {
+        if (status === 'disconnected') setIsConnected(false)
+        if (status === 'reconnected') {
+          setIsConnected(true)
+          fetchMessages(channelId).then(data => {
+             if (data) useAppStore.getState().setMessages((data as any).reverse())
+          })
+        }
+      })
+    })
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(realtimeChannel)
       setMessages([])
     }
-  }, [channelId, setMessages])
+  }, [channelId, setMessages, fetchMessages, setIsConnected])
 
-  // Auto scroll to bottom on new messages
+  // Virtualization
+  const parentRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    overscan: 10,
+  })
+
+  // Auto scroll to bottom
   useEffect(() => {
-    if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" })
+    if (autoScroll && messages.length > 0) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' })
     }
-  }, [messages.length, autoScroll])
+  }, [messages.length, autoScroll, virtualizer])
 
-  // Track scroll position
-  function handleScroll() {
-    if (!scrollRef.current) return
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
-    setAutoScroll(scrollHeight - scrollTop - clientHeight < 100)
-  }
-
-  // Load more messages
-  async function loadMore() {
-    if (!hasMore || messages.length === 0) return
-    const supabase = createClient()
-    const oldest = messages[0]
-
-    const { data } = await supabase
-      .from("messages")
-      .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
-      .eq("channel_id", channelId)
-      .lt("created_at", oldest.created_at)
-      .order("created_at", { ascending: false })
-      .limit(50)
-
-    if (data && data.length > 0) {
-      const existing = useAppStore.getState().messages
-      useAppStore.getState().setMessages([...data.reverse(), ...existing])
-      setHasMore(data.length === 50)
-    } else {
-      setHasMore(false)
-    }
-  }
+  const handleScroll = useCallback(() => {
+    if (!parentRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current
+    const atBottom = scrollHeight - scrollTop - clientHeight < 100
+    setAutoScroll(atBottom)
+  }, [])
 
   async function handleSendMessage(content: string, attachments: FileAttachment[]) {
-    const currentUser = useAppStore.getState().currentUser
     if (!currentUser) return
     const supabase = createClient()
     
-    // Create message first
-    const { data: msg, error: msgError } = await supabase
-      .from("messages")
-      .insert({
-        channel_id: channelId,
-        user_id: currentUser.id,
-        content: content || "",
-        reply_to_id: replyTo?.id ?? null,
-      })
-      .select()
-      .single()
+    const optimisticId = `temp-${Date.now()}`
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      channel_id: channelId,
+      user_id: currentUser.id,
+      content: content || "",
+      created_at: new Date().toISOString(),
+      edited: false,
+      reply_to_id: replyTo?.id ?? null,
+      profile: currentUser,
+      reactions: [],
+      attachments: [], 
+      reply_to: replyTo,
+      isPending: true
+    }
 
-    if (msgError || !msg) throw new Error(msgError?.message || "Failed to create message")
+    addMessage(optimisticMessage)
+    setAutoScroll(true)
 
-    // Upload attachments
-    if (attachments.length > 0) {
-      const { data: buckets } = await supabase.storage.listBuckets()
-      if (!buckets?.find((b) => b.name === "attachments")) {
-        toast("Storage not set up. Please contact admin.", { variant: "destructive" })
-        return
-      }
-
-      for (const att of attachments) {
-        const fileExt = att.file.name.split(".").pop()
-        const filePath = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-        
-        const { error: uploadError } = await supabase.storage
-          .from("attachments")
-          .upload(filePath, att.file, { cacheControl: "3600", upsert: false })
-          
-        if (uploadError) {
-          continue
-        }
-
-        const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(filePath)
-        
-        const isImage = att.file.type.startsWith("image/")
-        let width = null
-        let height = null
-        if (isImage) {
-          try {
-            const dims = await getImageDimensions(att.file)
-            width = dims.width
-            height = dims.height
-          } catch (e) {}
-        }
-
-        const expiresAt = new Date(Date.now() + 49 * 24 * 60 * 60 * 1000).toISOString()
-
-        const { error: attError } = await supabase.from("attachments").insert({
-          message_id: msg.id,
-          file_url: urlData.publicUrl,
-          file_name: att.file.name,
-          file_type: att.file.type,
-          file_size: att.file.size,
-          is_image: isImage,
-          width,
-          height,
-          expires_at: expiresAt,
-        })
-
-        if (attError) {
-          // Do nothing
-        }
-      }
-      
-      // Re-fetch the full message with attachments so the sender sees the image
-      const { data: fullMsg } = await supabase
+    try {
+      // Insert message
+      const { data: msg, error: msgError } = await supabase
         .from("messages")
-        .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
-        .eq("id", msg.id)
+        .insert({
+          channel_id: channelId,
+          user_id: currentUser.id,
+          content: content || "",
+          reply_to_id: replyTo?.id ?? null,
+        })
+        .select(`
+          *,
+          profile:profiles(*),
+          reactions:message_reactions(*),
+          attachments:attachments(*),
+          reply_to:messages(
+            id,
+            content,
+            profile:profiles(username, avatar_url)
+          )
+        `)
         .single()
+
+      if (msgError) throw msgError
       
-      if (fullMsg) {
-        useAppStore.getState().updateMessage(msg.id, fullMsg as any)
+      deleteMessage(optimisticId)
+      addMessage(msg as any)
+
+      // Handle attachments
+      if (attachments.length > 0) {
+        for (const att of attachments) {
+          const fileExt = att.file.name.split(".").pop()
+          const filePath = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+          
+          const { error: uploadError } = await supabase.storage
+            .from("attachments")
+            .upload(filePath, att.file, { cacheControl: "3600", upsert: false })
+            
+          if (uploadError) continue
+
+          const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(filePath)
+          
+          const isImage = att.file.type.startsWith("image/")
+          let width = null
+          let height = null
+          if (isImage) {
+            try {
+              const dims = await getImageDimensions(att.file)
+              width = dims.width
+              height = dims.height
+            } catch (e) {}
+          }
+
+          const expiresAt = new Date(Date.now() + 49 * 24 * 60 * 60 * 1000).toISOString()
+
+          const { error: attError } = await supabase.from("attachments").insert({
+            message_id: msg.id,
+            file_url: urlData.publicUrl,
+            file_name: att.file.name,
+            file_type: att.file.type,
+            file_size: att.file.size,
+            is_image: isImage,
+            width,
+            height,
+            expires_at: expiresAt,
+          })
+
+          if (attError) {
+            toast("Upload failed. Please try again.", { variant: "destructive" })
+            return
+          }
+        }
+        
+        // Re-fetch to get attachments
+        const { data: finalMsg } = await supabase
+          .from("messages")
+          .select("*, profile:profiles(*), reactions:message_reactions(*), attachments:attachments(*)")
+          .eq("id", msg.id)
+          .single()
+        
+        if (finalMsg) updateMessage(msg.id, finalMsg as any)
       }
+    } catch (err: unknown) {
+      deleteMessage(optimisticId)
+      toast("Upload failed. Please try again.", { variant: "destructive" })
     }
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col relative">
+      {/* Reconnection Banner */}
+      {!isConnected && (
+        <div className="bg-[#FFB800] text-black px-4 py-1 flex items-center justify-center gap-2 text-xs font-bold animate-pulse">
+          <RefreshCw className="size-3 animate-spin" />
+          Reconnecting... messages may be delayed
+        </div>
+      )}
+
       {/* Header */}
       <div className="glass flex h-12 shrink-0 items-center gap-2 border-b border-border-subtle px-4">
         <Hash className="size-4 text-text-muted" />
@@ -388,49 +489,48 @@ function ChatView({
 
       {/* Messages */}
       <div
-        ref={scrollRef}
+        ref={parentRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         {loading ? (
           <div className="flex h-full flex-col items-center justify-center gap-3">
-            <div className="h-8 w-32 skeleton rounded-lg" />
-            <p className="text-sm text-text-muted text-muted-opacity">
-              definitely not copying anyone...
-            </p>
+             <Loader2 className="size-8 animate-spin text-accent-primary" />
+             <p className="text-sm text-text-muted">Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-text-muted text-muted-opacity">
-              no messages yet, be the first to say something totally original
-            </p>
+            <p className="text-sm text-text-muted">no messages yet...</p>
           </div>
         ) : (
-          <>
-            {hasMore && (
-              <div className="mb-4 text-center">
-                <button
-                  onClick={loadMore}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Load older messages
-                </button>
-              </div>
-            )}
-            <div className="space-y-1">
-              {messages.map((message, i) => (
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualItem) => (
+              <div
+                key={messages[virtualItem.index].id}
+                data-index={virtualItem.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
                 <MessageBubble
-                  key={message.id}
-                  message={message}
-                  isFirst={i === 0 || messages[i - 1]?.user_id !== message.user_id}
-                  onReply={(msg) => {
-                    setReplyTo(msg)
-                  }}
+                  message={messages[virtualItem.index]}
+                  isFirst={virtualItem.index === 0 || messages[virtualItem.index - 1]?.user_id !== messages[virtualItem.index].user_id}
+                  onReply={setReplyTo}
                 />
-              ))}
-            </div>
-            <div ref={bottomRef} />
-          </>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -438,10 +538,10 @@ function ChatView({
       {!autoScroll && !loading && (
         <button
           onClick={() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
             setAutoScroll(true)
+            virtualizer.scrollToIndex(messages.length - 1)
           }}
-          className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-accent-primary px-3 py-1 text-xs font-bold text-bg-primary shadow-accent-glow"
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-accent-primary px-3 py-1 text-xs font-bold text-bg-primary shadow-accent-glow z-20"
         >
           <ChevronDown className="size-3 inline" /> New messages
         </button>
@@ -457,8 +557,7 @@ function ChatView({
             <div className="flex items-center gap-2 border-b border-border-subtle bg-bg-tertiary/50 px-4 py-1.5 rounded-t-lg">
               <Reply className="size-3 text-muted-foreground shrink-0" />
               <div className="flex-1 truncate text-xs text-muted-foreground">
-                Replying to <span className="font-medium text-foreground">{replyTo.profile?.username ?? "Unknown"}</span>:{" "}
-                {replyTo.content.slice(0, 80)}
+                Replying to <span className="font-medium text-foreground">{replyTo.profile?.username ?? "Unknown"}</span>
               </div>
               <button onClick={() => setReplyTo(null)} className="text-muted-foreground hover:text-foreground">
                 <X className="size-3" />
@@ -476,7 +575,7 @@ function ChatView({
 
 const EMOJIS = ["👍", "❤️", "😂", "🔥", "🚀", "🎉", "💯", "👀"]
 
-function MessageBubble({
+const MessageBubble = memo(({
   message,
   isFirst,
   onReply,
@@ -484,8 +583,11 @@ function MessageBubble({
   message: Message
   isFirst: boolean
   onReply: (msg: Message) => void
-}) {
-  const { currentUser, updateMessage, deleteMessage } = useAppStore()
+}) => {
+  const currentUser = useAppStore((state) => state.currentUser)
+  const updateMessage = useAppStore((state) => state.updateMessage)
+  const deleteMessage = useAppStore((state) => state.deleteMessage)
+
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [showEmojis, setShowEmojis] = useState(false)
@@ -498,8 +600,7 @@ function MessageBubble({
     ? new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : ""
 
-  // Group reactions by emoji
-  const groupedReactions = (message.reactions ?? []).reduce(
+  const groupedReactions = useMemo(() => (message.reactions ?? []).reduce(
     (acc, r) => {
       const existing = acc.find((g) => g.emoji === r.emoji)
       if (existing) {
@@ -511,9 +612,9 @@ function MessageBubble({
       return acc
     },
     [] as { emoji: string; count: number; reacted: boolean }[],
-  )
+  ), [message.reactions, currentUser?.id])
 
-  async function handleSaveEdit() {
+  const handleSaveEdit = useCallback(async () => {
     if (!editContent.trim() || editContent === message.content) {
       setEditing(false)
       return
@@ -524,14 +625,14 @@ function MessageBubble({
       .eq("id", message.id)
     updateMessage(message.id, { content: editContent.trim(), edited: true } as any)
     setEditing(false)
-  }
+  }, [editContent, message.content, message.id, updateMessage, supabase])
 
-  async function handleDelete() {
+  const handleDelete = useCallback(async () => {
     await supabase.from("messages").delete().eq("id", message.id)
     deleteMessage(message.id)
-  }
+  }, [message.id, deleteMessage, supabase])
 
-  async function handleReaction(emoji: string) {
+  const handleReaction = useCallback(async (emoji: string) => {
     const existing = (message.reactions ?? []).find(
       (r) => r.emoji === emoji && r.user_id === currentUser?.id,
     )
@@ -551,7 +652,7 @@ function MessageBubble({
       })
       useAppStore.getState().addReaction(message.id, { emoji, userId: currentUser?.id ?? "" })
     }
-  }
+  }, [message.id, message.reactions, currentUser?.id, supabase])
 
   if (editing) {
     return (
@@ -577,7 +678,7 @@ function MessageBubble({
   }
 
   return (
-    <div className="group relative flex items-start gap-3 rounded-md px-2 py-0.5 transition-colors hover:bg-bg-secondary/50">
+    <div className={`group relative flex items-start gap-3 rounded-md px-2 py-0.5 transition-colors hover:bg-bg-secondary/50 ${message.isPending ? 'opacity-70' : ''}`}>
       {/* Avatar or spacer */}
       {isFirst ? (
         <span className="flex size-9 shrink-0 items-center justify-center rounded-server bg-surface text-xs font-semibold text-accent-primary">
@@ -593,24 +694,15 @@ function MessageBubble({
         {isFirst && (
           <div className="flex items-baseline gap-2">
             <span className="text-sm font-semibold text-text-primary">{message.profile?.username ?? "Unknown"}</span>
-            <span className="text-[11px] text-text-muted">{time}</span>
-            {message.attachments?.some((a) => a.is_image) && (
-              <span className="flex items-center text-[#AAFF00] animate-[camera-pulse_0.6s_ease-out_forwards]" title="Contains image">
-                <style>{`
-                  @keyframes camera-pulse {
-                    0% { transform: scale(1); opacity: 0; }
-                    50% { transform: scale(1.3); opacity: 1; filter: drop-shadow(0 0 8px rgba(170,255,0,0.8)); }
-                    100% { transform: scale(0.85); opacity: 1; filter: drop-shadow(0 0 4px rgba(170,255,0,0.4)); }
-                  }
-                `}</style>
-                <Camera className="size-3 drop-shadow-[0_0_4px_rgba(170,255,0,0.6)]" />
-              </span>
-            )}
+            <span className="text-[11px] text-text-muted flex items-center gap-1">
+              {time}
+              {message.isPending && <Loader2 className="size-2 animate-spin" />}
+            </span>
             {message.edited && <span className="text-[11px] text-text-muted">(edited)</span>}
           </div>
         )}
         {message.content && (
-          <p className="text-[15px] leading-[1.6] text-text-secondary">{message.content}</p>
+          <p className="text-[15px] leading-[1.6] text-text-secondary whitespace-pre-wrap">{message.content}</p>
         )}
 
         {/* Attachments */}
@@ -642,84 +734,98 @@ function MessageBubble({
               {message.reply_to.profile?.username ?? "Unknown"}
             </span>
             <span className="truncate text-xs text-muted-foreground">
-              {message.reply_to.content.slice(0, 60)}
+              {message.reply_to.content}
             </span>
           </div>
         )}
       </div>
 
       {/* Hover actions */}
-      <div className="invisible absolute -top-3 right-2 flex items-center gap-0.5 rounded-lg border border-border-subtle bg-surface shadow-sm backdrop-blur-[10px] group-hover:visible">
-        <button
-          onClick={() => onReply(message)}
-          className="rounded p-1 text-muted-foreground hover:text-foreground"
-          title="Reply"
-        >
-          <Reply className="size-3.5" />
-        </button>
-        <div className="relative">
+      {!message.isPending && (
+        <div className="invisible absolute -top-3 right-2 flex items-center gap-0.5 rounded-lg border border-border-subtle bg-surface shadow-sm backdrop-blur-[10px] group-hover:visible z-10">
           <button
-            onClick={() => setShowEmojis(!showEmojis)}
+            onClick={() => onReply(message)}
             className="rounded p-1 text-muted-foreground hover:text-foreground"
-            title="React"
+            title="Reply"
           >
-            <SmilePlus className="size-3.5" />
+            <Reply className="size-3.5" />
           </button>
-          {showEmojis && (
-            <div className="absolute top-full right-0 z-50 mt-1 flex gap-0.5 rounded-lg border border-border-subtle bg-surface p-1 shadow-lg backdrop-blur-[10px]">
-              {EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => {
-                    handleReaction(emoji)
-                    setShowEmojis(false)
-                  }}
-                  className="rounded p-1 text-sm hover:bg-muted"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowEmojis(!showEmojis)}
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+              title="React"
+            >
+              <SmilePlus className="size-3.5" />
+            </button>
+            {showEmojis && (
+              <div className="absolute top-full right-0 z-50 mt-1 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-bg-secondary border border-border-subtle rounded-xl overflow-hidden p-2 flex flex-col gap-2">
+                   <div className="flex gap-1">
+                      {EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            handleReaction(emoji)
+                            setShowEmojis(false)
+                          }}
+                          className="size-8 flex items-center justify-center rounded hover:bg-surface text-lg transition-colors"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                   </div>
+                   <div className="border-t border-border-subtle pt-2">
+                      <EmojiPicker 
+                        onEmojiSelect={(emoji) => {
+                          handleReaction(emoji)
+                          setShowEmojis(false)
+                        }}
+                        onClickOutside={() => setShowEmojis(false)}
+                      />
+                   </div>
+                </div>
+              </div>
+            )}
+          </div>
+          {isOwner && (
+            <>
+              <button
+                onClick={() => {
+                  setEditContent(message.content)
+                  setEditing(true)
+                }}
+                className="rounded p-1 text-muted-foreground hover:text-foreground"
+                title="Edit"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="rounded p-1 text-muted-foreground hover:text-destructive"
+                title="Delete"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </>
           )}
         </div>
-        {isOwner && (
-          <>
-            <button
-              onClick={() => {
-                setEditContent(message.content)
-                setEditing(true)
-              }}
-              className="rounded p-1 text-muted-foreground hover:text-foreground"
-              title="Edit"
-            >
-              <Pencil className="size-3.5" />
-            </button>
-            <button
-              onClick={handleDelete}
-              className="rounded p-1 text-muted-foreground hover:text-destructive"
-              title="Delete"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </>
-        )}
-      </div>
+      )}
     </div>
   )
-}
+})
 
+MessageBubble.displayName = "MessageBubble"
 
 // ─── Voice Channel View ─────────────────────────────────────────
 
 function VoiceChannelView({ channelName, channelId }: { channelName: string; channelId: string }) {
-  const {
-    connectedVoiceChannelId,
-    setConnectedVoiceChannelId,
-    micOn,
-    setMicOn,
-    deafened,
-    setDeafened,
-  } = useAppStore()
+  const connectedVoiceChannelId = useAppStore((state) => state.connectedVoiceChannelId)
+  const setConnectedVoiceChannelId = useAppStore((state) => state.setConnectedVoiceChannelId)
+  const micOn = useAppStore((state) => state.micOn)
+  const setMicOn = useAppStore((state) => state.setMicOn)
+  const deafened = useAppStore((state) => state.deafened)
+  const setDeafened = useAppStore((state) => state.setDeafened)
 
   const participants = useParticipants()
   const isConnected = connectedVoiceChannelId === channelId
@@ -727,9 +833,7 @@ function VoiceChannelView({ channelName, channelId }: { channelName: string; cha
   if (!isConnected) {
     return (
       <div className="flex h-full flex-col relative overflow-hidden bg-bg-primary">
-        {/* Background ambient glow */}
         <div className="hero-glow left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20" />
-        
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center animate-fade-in-up">
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-server border border-border-subtle bg-surface shadow-xl">
             <div className="flex size-12 items-center justify-center rounded-lg bg-accent-primary/15 text-accent-primary">
@@ -737,9 +841,6 @@ function VoiceChannelView({ channelName, channelId }: { channelName: string; cha
             </div>
           </div>
           <h2 className="text-2xl font-bold tracking-heading">{channelName}</h2>
-          <p className="mt-3 max-w-sm text-center text-sm text-text-muted text-muted-opacity">
-            Jump into the voice channel to start talking with your community.
-          </p>
           <Button
             size="lg"
             className="mt-8 shadow-accent-glow transition-transform hover:scale-105"
@@ -754,7 +855,6 @@ function VoiceChannelView({ channelName, channelId }: { channelName: string; cha
 
   return (
     <div className="flex h-full flex-col relative overflow-hidden bg-bg-primary">
-      {/* Header */}
       <div className="glass flex h-12 shrink-0 items-center gap-2 border-b border-border-subtle px-4">
         <Volume2 className="size-4 text-text-muted" />
         <span className="font-semibold">{channelName}</span>
@@ -767,7 +867,6 @@ function VoiceChannelView({ channelName, channelId }: { channelName: string; cha
         </span>
       </div>
 
-      {/* Grid */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {participants.map((p) => {
@@ -795,7 +894,6 @@ function VoiceChannelView({ channelName, channelId }: { channelName: string; cha
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex shrink-0 items-center justify-center gap-4 border-t border-border-subtle bg-bg-secondary p-4 backdrop-blur-sm">
         <Button
           variant={micOn && !deafened ? "outline" : "destructive"}
@@ -825,4 +923,3 @@ function VoiceChannelView({ channelName, channelId }: { channelName: string; cha
     </div>
   )
 }
-

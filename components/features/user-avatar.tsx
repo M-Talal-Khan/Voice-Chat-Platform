@@ -1,3 +1,4 @@
+import { memo, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
@@ -24,7 +25,7 @@ function statusColor(status: string): string {
   }
 }
 
-export function UserAvatar({
+export const UserAvatar = memo(({
   user,
   size = "default",
   showStatus = true,
@@ -34,11 +35,19 @@ export function UserAvatar({
   size?: "default" | "sm" | "lg"
   showStatus?: boolean
   className?: string
-}) {
+}) => {
+  const [imgError, setImgError] = useState(false)
+
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       <Avatar size={size}>
-        {user.avatar && <AvatarImage src={user.avatar} alt={user.username} />}
+        {user.avatar && !imgError && (
+          <AvatarImage 
+            src={user.avatar} 
+            alt={user.username} 
+            onError={() => setImgError(true)} 
+          />
+        )}
         <AvatarFallback
           style={{ backgroundColor: user.color }}
           className="font-medium text-primary-foreground"
@@ -60,4 +69,6 @@ export function UserAvatar({
       )}
     </span>
   )
-}
+})
+
+UserAvatar.displayName = "UserAvatar"

@@ -20,11 +20,11 @@ import { cn } from "@/lib/utils"
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
-  const {
-    servers,
-    channels,
-    setSelectedServer,
-    setSelectedChannel,
+  const { 
+    servers, 
+    channels, 
+    setSelectedServer, 
+    setSelectedChannel, 
     setDmView,
     setCurrentUser,
     setMessages
@@ -74,7 +74,7 @@ export function CommandPalette() {
           <Command.Empty className="py-6 text-center text-sm text-text-muted">
             No results found.
           </Command.Empty>
-
+          
           <Command.Group heading="Navigation" className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             <CommandItem
               onSelect={() => runCommand(() => {
@@ -146,7 +146,7 @@ export function CommandPalette() {
           )}
 
           <Command.Separator className="-mx-2 my-2 h-px bg-border-subtle" />
-
+          
           <Command.Group heading="Settings" className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             <CommandItem onSelect={() => runCommand(() => window.dispatchEvent(new CustomEvent("openUserSettings")))}>
               <Settings className="mr-2 size-4" />
