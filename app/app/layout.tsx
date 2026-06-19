@@ -12,12 +12,10 @@ import { dynamic } from "@/lib/performance"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Menu } from "lucide-react"
 
-// Lazy load modals and heavy components
-const CreateServerModal = dynamic(() => import("@/components/features/modals").then(m => m.CreateServerModal))
-const JoinServerModal = dynamic(() => import("@/components/features/modals").then(m => m.JoinServerModal))
-const CreateChannelModal = dynamic(() => import("@/components/features/modals").then(m => m.CreateChannelModal))
-const ServerInfoModal = dynamic(() => import("@/components/features/modals").then(m => m.ServerInfoModal))
-const DeleteServerModal = dynamic(() => import("@/components/features/modals").then(m => m.DeleteServerModal))
+// Static imports for modals to prevent Server Action dynamic import bugs
+import { CreateServerModal, JoinServerModal, CreateChannelModal, ServerInfoModal, DeleteServerModal } from "@/components/features/modals"
+
+// Lazy load heavy components
 const ServerSettingsModal = dynamic(() => import("@/components/features/server-settings").then(m => m.ServerSettingsModal))
 const UserSettings = dynamic(() => import("@/components/features/user-settings").then(m => m.UserSettings))
 const CommandPalette = dynamic(() => import("@/components/features/command-palette").then(m => m.CommandPalette))
@@ -25,7 +23,7 @@ const CommandPalette = dynamic(() => import("@/components/features/command-palet
 import { useAppStore } from "@/lib/store"
 import { createClient } from "@/lib/supabase"
 import { usePresence, useUnreadNotifications } from "@/hooks/use-presence"
-import { Plus, Compass, Sparkles } from "lucide-react"
+import { Plus, Compass, Sparkles, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Server, Channel } from "@/lib/types"
 import Image from "next/image"
@@ -236,6 +234,9 @@ export default function AppLayout({
                 <Button size="lg" className="h-16 text-lg font-bold shadow-accent-glow hover:scale-[1.02] active:scale-[0.98] transition-all" onClick={() => setShowCreateServer(true)}>
                   <Plus className="mr-2 size-6" /> Create Your First Server
                 </Button>
+                <Button size="lg" variant="outline" className="h-16 text-lg font-bold hover:bg-surface/50 transition-all" onClick={() => setShowJoinServer(true)}>
+                  <Link2 className="mr-2 size-6" /> Join a Server
+                </Button>
                 <Button size="lg" variant="outline" className="h-16 text-lg font-bold hover:bg-surface/50 transition-all" onClick={() => router.push("/app/explore")}>
                   <Compass className="mr-2 size-6" /> Browse Public Servers
                 </Button>
@@ -259,6 +260,7 @@ export default function AppLayout({
       activeServerId={selectedServer?.id ?? null}
       onSelectServer={handleSelectServer}
       onAddServer={() => { setShowCreateServer(true); setMobileMenuOpen(false); }}
+      onJoinServer={() => { setShowJoinServer(true); setMobileMenuOpen(false); }}
       onExploreServers={() => { router.push("/app/explore"); setMobileMenuOpen(false); }}
       onOpenDm={handleOpenDm}
       dmActive={dmView}

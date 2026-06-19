@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useMemo } from "react"
-import { Plus, Compass, MessageSquare } from "lucide-react"
+import { Plus, Compass, MessageSquare, Link2 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import {
@@ -26,6 +26,7 @@ export function ServerRail({
   activeServerId: string | null
   onSelectServer: (id: string) => void
   onAddServer?: () => void
+  onJoinServer?: () => void
   onExploreServers?: () => void
   onOpenDm?: () => void
   dmActive?: boolean
@@ -113,6 +114,23 @@ export function ServerRail({
               <Plus className="size-6" />
             </TooltipTrigger>
             <TooltipContent side="right">Add a server</TooltipContent>
+          </Tooltip>
+        )}
+
+        {onJoinServer && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onJoinServer}
+                  className="flex size-12 items-center justify-center rounded-server border-2 border-dashed border-border-subtle bg-transparent text-text-muted transition-all hover:scale-105 hover:border-accent-primary hover:text-accent-primary hover:shadow-accent-glow"
+                />
+              }
+            >
+              <Link2 className="size-6" />
+            </TooltipTrigger>
+            <TooltipContent side="right">Join a server</TooltipContent>
           </Tooltip>
         )}
 
