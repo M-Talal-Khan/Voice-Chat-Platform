@@ -91,6 +91,8 @@ export interface Friend {
   status: "pending" | "accepted" | "blocked"
   created_at: string
   profile?: Profile
+  sender?: Profile
+  receiver?: Profile
 }
 
 export interface JoinRequest {

@@ -19,14 +19,16 @@ export function toast(
     })
   } else {
     sonnerToast.success(title, {
-      description: opts.description,
+      description: opts?.description,
     })
   }
 }
 
 export function useToasts() {
-  return { 
-    toasts: [], 
-    dismiss: () => {} 
+  const toasts: Toast[] = []
+
+  return {
+    toasts,
+    dismiss: (_id: string) => {}
   }
 }

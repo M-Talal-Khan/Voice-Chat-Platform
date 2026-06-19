@@ -181,21 +181,19 @@ export function JoinServerModal({
   const [code, setCode] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const { currentUser, setServers, servers } = useAppStore()
+  const { setServers, servers } = useAppStore()
 
   async function handleJoin() {
     if (!code.trim()) {
       setError("Invite code is required")
       return
     }
-    if (!currentUser) return
-
     setLoading(true)
     setError(null)
     
     try {
-      const server = await joinServerAction(code.trim(), currentUser.id)
-      setServers([...servers, server as any])
+      const server = await joinServerAction(code)
+      setServers(servers.some((s) => s.id === server.id) ? servers : [...servers, server])
       setCode("")
       onOpenChange(false)
     } catch (err: unknown) {

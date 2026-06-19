@@ -1,20 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Menu, MessageSquare, Users, Home } from "lucide-react"
+import { Menu, MessageSquare, Home } from "lucide-react"
 import { useAppStore } from "@/lib/store"
 import { useRouter, usePathname } from "next/navigation"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { ServerRail } from "@/components/layout/server-rail"
-import { ChannelSidebar } from "@/components/layout/channel-sidebar"
-import { DmSidebar } from "@/components/layout/dm-sidebar"
 
 export function MobileNavigation() {
   const [open, setOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
-  const { dmView, setDmView, selectedServer, setSelectedServer, setSelectedChannel } = useAppStore()
+  const { dmView, setDmView, servers, selectedServer, setSelectedServer } = useAppStore()
 
   // Close drawer on route change
   useEffect(() => {

@@ -151,7 +151,7 @@ export function CommandPalette() {
             <CommandItem onSelect={() => runCommand(() => window.dispatchEvent(new CustomEvent("openUserSettings")))}>
               <Settings className="mr-2 size-4" />
               <span>User Settings</span>
-              <Command.Shortcut className="ml-auto text-[10px] tracking-widest text-text-muted">⌘S</Command.Shortcut>
+              <span className="ml-auto text-[10px] tracking-widest text-text-muted">Ctrl+S</span>
             </CommandItem>
             <CommandItem onSelect={() => runCommand(handleLogout)}>
               <LogOut className="mr-2 size-4 text-danger" />

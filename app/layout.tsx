@@ -18,6 +18,7 @@ const geistMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
   title: 'Thiscord',
   description: 'Thiscord - totally not Discord',
   keywords: 'voice chat, text chat, thiscord, totally original, not discord',

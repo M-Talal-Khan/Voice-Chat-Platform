@@ -17,6 +17,7 @@ export function ServerRail({
   activeServerId,
   onSelectServer,
   onAddServer,
+  onJoinServer,
   onExploreServers,
   onOpenDm,
   dmActive,

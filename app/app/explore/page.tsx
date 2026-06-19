@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase"
 import { useAppStore } from "@/lib/store"
 import { joinServerAction } from "@/lib/queries"
 import type { Server } from "@/lib/types"
+import { toast } from "@/hooks/use-toast"
 
 const CATEGORIES = ["All", "Gaming", "Music", "Study", "Friends", "Art", "Tech", "Other"]
 
@@ -81,8 +82,8 @@ export default function ExplorePage() {
 
       if (server.is_public) {
         // Auto-join public server
-        const joined = await joinServerAction(server.invite_code, currentUser.id)
-        setStoreServers([...storeServers, joined as any])
+        const joined = await joinServerAction(server.invite_code)
+        setStoreServers(storeServers.some((s) => s.id === joined.id) ? storeServers : [...storeServers, joined])
         setServers(
           servers.map((s) =>
             s.id === server.id
@@ -105,7 +106,8 @@ export default function ExplorePage() {
         }
       }
     } catch (err) {
-      // Do nothing on err or handle silently
+      const message = err instanceof Error ? err.message : "Failed to join server"
+      toast("Could not join server", { description: message, variant: "destructive" })
     } finally {
       setJoining(null)
     }

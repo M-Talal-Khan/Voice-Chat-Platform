@@ -275,7 +275,6 @@ export default function AppLayout({
       activeChannelId={selectedChannel?.id ?? ""}
       onSelectChannel={handleSelectChannel}
       connectedVoiceId={connectedVoiceChannelId}
-      onJoinVoice={(id) => setConnectedVoiceChannelId(id)}
       onLeaveVoice={() => setConnectedVoiceChannelId(null)}
       micOn={micOn}
       onToggleMic={() => setMicOn(!micOn)}
