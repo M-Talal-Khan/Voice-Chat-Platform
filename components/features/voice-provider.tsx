@@ -80,7 +80,15 @@ export function VoiceProvider({
       token={token}
       connect={!!roomName && !!token}
       onDisconnected={handleDisconnected}
-      audio={!!roomName && !!token && micOn && !deafened} // Only request mic if connected
+      audio={
+        !!roomName && !!token && micOn && !deafened
+          ? {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          : false
+      }
       className="flex flex-1 flex-col"
     >
       {!deafened && <RoomAudioRenderer />}
